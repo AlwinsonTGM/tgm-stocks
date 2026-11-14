@@ -1,0 +1,11 @@
+# Build output and local machine state for the Android module.
+.gradle/
+build/
+app/build/
+app/src/main/assets/repo.zip
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/

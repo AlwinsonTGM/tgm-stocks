@@ -1,0 +1,33 @@
+# TGM Stocks is derived from ZhuLinsen/daily_stock_analysis
+
+TGM Stocks (application id `io.github.alwinsontgm.stocks`) is an Android
+distribution of the project below. The original source, the Web UI, and the
+analysis pipeline are the work of its authors and contributors.
+
+Upstream project: ZhuLinsen/daily_stock_analysis
+https://github.com/ZhuLinsen/daily_stock_analysis
+License: MIT
+
+Copyright (c) 2026 ZhuLinsen
+
+The MIT License text is reproduced in full in `LICENSE` at the repository root.
+The upstream copyright and permission notice is retained there and applies to
+the derived work.
+
+## Changes made for TGM Stocks
+
+- The analysis pipeline runs on the device inside an embedded Python runtime
+  (Chaquopy) instead of on a server, and the Web UI is rendered in a WebView.
+- The Android build uses `android/app/requirements-android.txt`, an Android
+  variant of `requirements.txt`; the differences are documented in that file.
+- `data_provider/akshare_fetcher.py` and `src/search_service.py` fall back to
+  inline execution when `Process.start()` fails, because Android cannot spawn
+  processes.
+- The app identity (name, package id, icon, version) and the Android build
+  files under `android/` are new.
+
+## Third-party components
+
+Third-party Python packages, the Python runtime, and the Android libraries
+bundled in the APK keep their own licenses. Upstream's list of third-party
+notices is in `THIRD_PARTY_NOTICES.md`.

@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
+
+// The build Python must be a CPython 3.13 interpreter for the host machine: Chaquopy
+// uses it to resolve and cross-install the Android wheels. It is never shipped in
+// the APK. Set it with the TGMS_BUILD_PYTHON environment variable or the
+// tgms.buildPython Gradle property (-Ptgms.buildPython=...). See android/README.md.
+def buildPythonPath = (findProperty('tgms.buildPython') ?: System.getenv('TGMS_BUILD_PYTHON') ?: '').trim()
+if (!buildPythonPath) {
+    throw new GradleException(
+        'TGM Stocks: no build Python configured.\n' +
+        'Set TGMS_BUILD_PYTHON to a CPython 3.13 executable (host architecture), e.g.\n' +
+        '  PowerShell: $env:TGMS_BUILD_PYTHON = "C:\\path\\to\\python3.13\\python.exe"\n' +
+        '  bash:       export TGMS_BUILD_PYTHON=/path/to/python3.13/bin/python3\n' +
+        'or pass -Ptgms.buildPython=<path>. See android/README.md for how to create one.')
+}
+def buildPythonFile = file(buildPythonPath)
+if (!buildPythonFile.isFile()) {
+    throw new GradleException(
+        "TGM Stocks: TGMS_BUILD_PYTHON points at '${buildPythonPath}', which is not a file.\n" +
+        'Point it at the python executable of a CPython 3.13 installation. See android/README.md.')
+}
+
+android {
+    namespace 'io.github.alwinsontgm.stocks'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.alwinsontgm.stocks'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = '3.13'
+        buildPython(buildPythonFile.absolutePath)
+        pip {
+            // Cross-built wheels live inside this repository so a clean clone can build
+            // without the sibling lab directories the Probe relied on.
+            options '--find-links', rootProject.file('wheels').absolutePath
+            options '--extra-index-url', 'https://chaquo.com/pypi-upstream'
+            install '-r', 'requirements-android.txt'
+        }
+    }
+}
