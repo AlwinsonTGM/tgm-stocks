@@ -165,6 +165,7 @@ def _warn_if_open_cors_without_auth() -> None:
 
 from api.v1 import api_v1_router
 from api.middlewares.auth import add_auth_middleware
+from api.middlewares.loopback_token import add_loopback_token_middleware
 from api.middlewares.security_guard import add_guard_middleware, is_guard_enabled
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import HealthResponse
@@ -386,6 +387,11 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 
     if not guard_enabled:
         add_auth_middleware(app)
+
+    # The Loopback token is added last, so it is the outermost middleware after
+    # CORS: a request without the token is rejected before the guard or the
+    # admin auth middleware does any work. It is a no-op when no token is set.
+    add_loopback_token_middleware(app)
     
     # ============================================================
     # 注册路由

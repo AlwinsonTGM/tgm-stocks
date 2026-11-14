@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 新增可选 TickPlus A 股 / ETF 日 K、实时行情与名称查询，支持配置管理、Actions Secret 和失败回退，在数据源条目中标注推荐并补充接入说明。
 
 - [修复] 基本面估值复用本轮已获取的实时行情（包括失败结果），避免重复请求挤占基本面和资金流预算；独立调用保留原有取数行为。
+- [新功能] 设置 `TGMS_LOOPBACK_TOKEN` 时，API 要求每个请求携带 Loopback token（`tgms_token` Cookie 或 `Authorization: Bearer`），未携带返回 401；未设置时行为不变，token 不写入日志。
 - [文档] 三语 README 产品预览改用 640×320、4 帧/秒的宽屏裁剪动图，减少展示高度和文件体积，点击可查看完整原版演示。
 
 - [文档] 将中、英、繁体 README 的 Trendshift 日榜徽章替换为仓库徽章，并添加仓库详情页链接。

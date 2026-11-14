@@ -64,6 +64,35 @@ Both scripts:
 
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
+## Loopback token
+
+The on-device backend listens on `127.0.0.1` on an OS-assigned port, which any
+other app on the phone can reach. To stop that, the app generates a random
+per-install secret (the **Loopback token**) on first launch, stores it in
+app-private preferences (`tgms_loopback`), and passes it to Python as
+`TGMS_LOOPBACK_TOKEN` before the backend starts.
+
+When that variable is set, the backend rejects every request that does not
+present the token, either as the `tgms_token` cookie or as
+`Authorization: Bearer <token>`. The WebView gets the cookie for
+`http://127.0.0.1:<port>` before the first page load, so subresources and XHR
+are authenticated too; a request header would only cover the first request.
+When the variable is unset (desktop, tests) no token is required.
+
+The token is never logged. The backend logs its port at startup, which is
+enough to verify the protection from a computer:
+
+```bash
+adb logcat -s tgms.bootstrap            # "On-device backend listening on 127.0.0.1:<port>"
+adb forward tcp:<port> tcp:<port>
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>/api/health   # 401
+curl -s -o /dev/null -w '%{http_code}\n' -b "tgms_token=<token>" http://127.0.0.1:<port>/api/health   # 200
+```
+
+The token value is only readable on a debuggable build, with
+`adb shell run-as io.github.alwinsontgm.stocks cat shared_prefs/tgms_loopback.xml`.
+The `tgms_token` cookie is `HttpOnly`, so WebView JavaScript cannot read it.
+
 ## Wheels
 
 Compiled dependencies are cross-built for `android_24_arm64_v8a` and committed

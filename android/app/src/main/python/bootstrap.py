@@ -8,6 +8,11 @@ from pathlib import Path
 
 _server = None
 
+# The Loopback token is read by api.middlewares.loopback_token from this
+# variable. The Android app sets it before calling start(); it is never logged.
+LOOPBACK_TOKEN_ENV = "TGMS_LOOPBACK_TOKEN"
+
+
 def start(files_dir):
     global _server
     if _server is not None:
@@ -35,6 +40,15 @@ def start(files_dir):
     for _ in range(600):
         if server.started:
             _server = (server, port)
+            # The port is safe to log; it lets a developer forward it with adb.
+            # The token is deliberately absent from this line. print() is used
+            # because Chaquopy routes stdout to logcat as python.stdout, while
+            # the root logger has no handler at this point.
+            print(
+                "tgms.bootstrap: on-device backend listening on 127.0.0.1:%s (loopback token %s)"
+                % (port, "required" if os.getenv(LOOPBACK_TOKEN_ENV) else "not set"),
+                flush=True,
+            )
             return port
         if not thread.is_alive():
             raise RuntimeError("ASGI server stopped before startup")
