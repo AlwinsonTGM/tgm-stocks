@@ -93,6 +93,18 @@ The token value is only readable on a debuggable build, with
 `adb shell run-as io.github.alwinsontgm.stocks cat shared_prefs/tgms_loopback.xml`.
 The `tgms_token` cookie is `HttpOnly`, so WebView JavaScript cannot read it.
 
+## Android feature profile
+
+The app also sets `TGMS_PLATFORM=android` before the backend starts (the
+bootstrap sets it as well). With that profile the backend applies ADR-0006:
+the scheduler settings (`SCHEDULE_ENABLED`, `SCHEDULE_TIME`, `SCHEDULE_TIMES`,
+`SCHEDULE_RUN_IMMEDIATELY`) and the image-notification rendering settings
+(`MARKDOWN_TO_IMAGE_CHANNELS`, `MARKDOWN_TO_IMAGE_MAX_CHARS`, `MD2IMG_ENGINE`)
+are left out of the config schema, so the Web UI cannot render them, and the
+config API rejects any attempt to write them with a 400 error naming the
+feature as unavailable on Android. When the variable is unset (desktop, tests)
+nothing changes.
+
 ## Wheels
 
 Compiled dependencies are cross-built for `android_24_arm64_v8a` and committed

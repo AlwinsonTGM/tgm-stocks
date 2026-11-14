@@ -27,6 +27,10 @@ public class MainActivity extends Activity {
     private static final String PREF_TOKEN = "loopback_token";
     private static final String TOKEN_ENV = "TGMS_LOOPBACK_TOKEN";
     private static final String TOKEN_COOKIE = "tgms_token";
+    // Marks the backend as the Android feature profile: the config API then
+    // leaves out the scheduler and image-notification settings (ADR-0006).
+    private static final String PLATFORM_ENV = "TGMS_PLATFORM";
+    private static final String ANDROID_PLATFORM = "android";
 
     private String loopbackToken() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -77,6 +81,7 @@ public class MainActivity extends Activity {
                 // Chaquopy shares this process's environment with Python, so the
                 // backend reads the token from here before it starts.
                 py.getModule("os").get("environ").callAttr("__setitem__", TOKEN_ENV, token);
+                py.getModule("os").get("environ").callAttr("__setitem__", PLATFORM_ENV, ANDROID_PLATFORM);
                 int port = py.getModule("bootstrap").callAttr("start", getFilesDir().getAbsolutePath()).toInt();
                 runOnUiThread(() -> {
                     LinearLayout content = new LinearLayout(this);

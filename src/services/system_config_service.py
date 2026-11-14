@@ -65,6 +65,7 @@ from src.llm.hermes import (
 from src.core.config_manager import ConfigManager
 from src.core.config_registry import (
     build_schema_response,
+    get_android_unsupported_feature_label,
     get_category_definitions,
     get_field_definition,
     get_registered_field_keys,
@@ -2417,6 +2418,23 @@ class SystemConfigService:
             value = item["value"]
             field_schema = get_field_definition(key, value)
             is_sensitive = bool(field_schema.get("is_sensitive", False))
+
+            unsupported_feature = get_android_unsupported_feature_label(key)
+            if unsupported_feature:
+                # The Android app cannot honour this feature (ADR-0006). Refuse
+                # the write instead of storing configuration that silently fails.
+                issues.append(
+                    {
+                        "key": key,
+                        "severity": "error",
+                        "code": "android_feature_unavailable",
+                        "message": (
+                            f"{key} is unavailable on Android: "
+                            f"{unsupported_feature} is not supported in the Android app"
+                        ),
+                    }
+                )
+                continue
 
             if is_sensitive and value == mask_token and saved_config_map.get(key):
                 continue

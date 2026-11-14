@@ -7,6 +7,7 @@ validation hints, and category grouping.
 
 from __future__ import annotations
 
+import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
@@ -4639,6 +4640,63 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Features the Android app cannot honour (ADR-0006). The Android bootstrap sets
+# TGMS_PLATFORM=android before the on-device backend starts; with that profile
+# these keys are left out of the schema so the Web UI cannot render a switch
+# that would fail silently, and the config API refuses to write them.
+ANDROID_PLATFORM_ENV = "TGMS_PLATFORM"
+ANDROID_PLATFORM_VALUE = "android"
+
+# Scheduled analysis spawns processes, which Android cannot do.
+ANDROID_UNSUPPORTED_SCHEDULER_KEYS = frozenset({
+    "SCHEDULE_ENABLED",
+    "SCHEDULE_TIME",
+    "SCHEDULE_TIMES",
+    "SCHEDULE_RUN_IMMEDIATELY",
+})
+
+# Image notifications render through wkhtmltopdf/wkhtmltoimage, absent on Android.
+ANDROID_UNSUPPORTED_IMAGE_NOTIFICATION_KEYS = frozenset({
+    "MARKDOWN_TO_IMAGE_CHANNELS",
+    "MARKDOWN_TO_IMAGE_MAX_CHARS",
+    "MD2IMG_ENGINE",
+})
+
+ANDROID_UNSUPPORTED_FEATURE_KEYS = (
+    ANDROID_UNSUPPORTED_SCHEDULER_KEYS | ANDROID_UNSUPPORTED_IMAGE_NOTIFICATION_KEYS
+)
+
+# Human-readable feature names for error messages, keyed by the feature's keys.
+_ANDROID_FEATURE_LABELS: Dict[str, str] = {
+    **{key: "scheduled analysis" for key in ANDROID_UNSUPPORTED_SCHEDULER_KEYS},
+    **{key: "image notifications" for key in ANDROID_UNSUPPORTED_IMAGE_NOTIFICATION_KEYS},
+}
+
+
+def is_android_platform() -> bool:
+    """Whether this backend runs inside the Android app."""
+    return os.getenv(ANDROID_PLATFORM_ENV, "").strip().lower() == ANDROID_PLATFORM_VALUE
+
+
+def get_android_unsupported_feature_label(key: str) -> Optional[str]:
+    """Return the feature name that makes ``key`` unavailable on Android, if any."""
+    if not is_android_platform():
+        return None
+    return _ANDROID_FEATURE_LABELS.get(key.upper())
+
+
+def is_android_unsupported_feature_key(key: str) -> bool:
+    """Whether ``key`` configures a feature the Android app cannot honour."""
+    return key.upper() in ANDROID_UNSUPPORTED_FEATURE_KEYS
+
+
+def get_schema_hidden_keys() -> frozenset:
+    """Keys the schema must omit for the current platform."""
+    if is_android_platform():
+        return ANDROID_UNSUPPORTED_FEATURE_KEYS
+    return frozenset()
+
+
 _DOC_FULL_GUIDE_ENV = [
     {
         "label": "完整指南：环境变量完整列表",
@@ -5237,11 +5295,14 @@ def get_field_definition(key: str, value_hint: Optional[str] = None) -> Dict[str
 
 def build_schema_response() -> Dict[str, Any]:
     """Build schema payload grouped by category."""
+    hidden_keys = get_schema_hidden_keys()
     category_map: Dict[str, Dict[str, Any]] = {}
     for category in get_category_definitions():
         category_map[category["category"]] = {**category, "fields": []}
 
     for key in sorted(_FIELD_DEFINITIONS.keys()):
+        if key in hidden_keys:
+            continue
         field = get_field_definition(key)
         category_map[field["category"]]["fields"].append(field)
 

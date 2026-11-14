@@ -12,11 +12,19 @@ _server = None
 # variable. The Android app sets it before calling start(); it is never logged.
 LOOPBACK_TOKEN_ENV = "TGMS_LOOPBACK_TOKEN"
 
+# Marks the backend as the Android feature profile (ADR-0006): the config API
+# then leaves out the scheduler and image-notification settings. The Android app
+# sets it before calling start(); the bootstrap sets it too so a start without
+# the app's environment still gets the profile.
+PLATFORM_ENV = "TGMS_PLATFORM"
+ANDROID_PLATFORM = "android"
+
 
 def start(files_dir):
     global _server
     if _server is not None:
         return _server[1]
+    os.environ[PLATFORM_ENV] = ANDROID_PLATFORM
     root = Path(files_dir) / "repo"
     state = Path(files_dir) / "state"
     state.mkdir(parents=True, exist_ok=True)

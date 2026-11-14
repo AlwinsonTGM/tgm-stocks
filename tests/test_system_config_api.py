@@ -32,6 +32,7 @@ from api.v1.schemas.system_config import (
 import src.auth as auth
 from src.config import Config
 from src.core.config_manager import ConfigManager
+from src.core.config_registry import ANDROID_PLATFORM_ENV, ANDROID_PLATFORM_VALUE
 from src.services.system_config_service import SystemConfigService
 
 
@@ -961,6 +962,131 @@ class SystemConfigApiTestCase(unittest.TestCase):
         self.assertEqual(payload["models"], ["qwen-plus", "qwen-turbo"])
         self.assertEqual(payload["stage"], "model_discovery")
         mock_discover.assert_called_once()
+
+
+# Keys of features the Android app cannot honour (ADR-0006).
+_ANDROID_SCHEDULER_KEYS = frozenset({
+    "SCHEDULE_ENABLED",
+    "SCHEDULE_TIME",
+    "SCHEDULE_TIMES",
+    "SCHEDULE_RUN_IMMEDIATELY",
+})
+# Image notifications have no switch in the registry today; these are the
+# rendering settings the feature reads, and the API refuses them all the same.
+_ANDROID_IMAGE_NOTIFICATION_KEYS = frozenset({
+    "MARKDOWN_TO_IMAGE_CHANNELS",
+    "MARKDOWN_TO_IMAGE_MAX_CHARS",
+    "MD2IMG_ENGINE",
+})
+_ANDROID_HIDDEN_KEYS = _ANDROID_SCHEDULER_KEYS | _ANDROID_IMAGE_NOTIFICATION_KEYS
+
+# A setting that must stay available in every profile.
+_ALWAYS_AVAILABLE_KEY = "STOCK_LIST"
+
+
+class AndroidFeatureProfileApiTestCase(unittest.TestCase):
+    """The config API applies the Android feature profile from TGMS_PLATFORM."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.env_path = Path(self.temp_dir.name) / ".env"
+        self.env_path.write_text(
+            "STOCK_LIST=600519,000001\nSCHEDULE_ENABLED=false\n",
+            encoding="utf-8",
+        )
+        self._orig_env_file = os.environ.get("ENV_FILE")
+        self._orig_database_path = os.environ.get("DATABASE_PATH")
+        os.environ["ENV_FILE"] = str(self.env_path)
+        os.environ["DATABASE_PATH"] = str(Path(self.temp_dir.name) / "android_profile_test.db")
+        Config.reset_instance()
+        self.manager = ConfigManager(env_path=self.env_path)
+        self.service = SystemConfigService(manager=self.manager)
+
+    def tearDown(self) -> None:
+        Config.reset_instance()
+        if self._orig_env_file is None:
+            os.environ.pop("ENV_FILE", None)
+        else:
+            os.environ["ENV_FILE"] = self._orig_env_file
+        if self._orig_database_path is None:
+            os.environ.pop("DATABASE_PATH", None)
+        else:
+            os.environ["DATABASE_PATH"] = self._orig_database_path
+        self.temp_dir.cleanup()
+
+    def _schema_keys(self) -> set[str]:
+        payload = system_config.get_system_config_schema(service=self.service).model_dump(by_alias=True)
+        return {field["key"] for category in payload["categories"] for field in category["fields"]}
+
+    def _put(self, items: list[dict[str, str]]) -> None:
+        current = system_config.get_system_config(include_schema=False, service=self.service).model_dump()
+        system_config.update_system_config(
+            request=UpdateSystemConfigRequest(
+                config_version=current["config_version"],
+                mask_token="******",
+                reload_now=False,
+                items=items,
+            ),
+            service=self.service,
+        )
+
+    def test_android_profile_hides_scheduler_and_image_notification_fields(self) -> None:
+        with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
+            keys = self._schema_keys()
+
+        self.assertFalse(keys & _ANDROID_HIDDEN_KEYS)
+        self.assertIn(_ALWAYS_AVAILABLE_KEY, keys)
+
+    def test_android_profile_rejects_enabling_scheduled_execution(self) -> None:
+        with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
+            with self.assertRaises(HTTPException) as context:
+                self._put([{"key": "SCHEDULE_ENABLED", "value": "true"}])
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(context.exception.detail["error"], "validation_failed")
+        issue = next(
+            issue for issue in context.exception.detail["issues"]
+            if issue["key"] == "SCHEDULE_ENABLED"
+        )
+        self.assertEqual(issue["code"], "android_feature_unavailable")
+        self.assertIn("unavailable on Android", issue["message"])
+        self.assertIn("scheduled analysis", issue["message"])
+        self.assertNotIn("SCHEDULE_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
+
+    def test_android_profile_rejects_image_notification_settings(self) -> None:
+        for key, value in (
+            ("MARKDOWN_TO_IMAGE_CHANNELS", "telegram"),
+            ("MARKDOWN_TO_IMAGE_MAX_CHARS", "15000"),
+            ("MD2IMG_ENGINE", "wkhtmltoimage"),
+        ):
+            with self.subTest(key=key):
+                with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
+                    with self.assertRaises(HTTPException) as context:
+                        self._put([{"key": key, "value": value}])
+
+                self.assertEqual(context.exception.status_code, 400)
+                issue = next(
+                    issue for issue in context.exception.detail["issues"]
+                    if issue["key"] == key
+                )
+                self.assertEqual(issue["code"], "android_feature_unavailable")
+                self.assertIn("image notifications", issue["message"])
+                self.assertNotIn(f"{key}={value}", self.env_path.read_text(encoding="utf-8"))
+
+    def test_android_profile_allows_unrelated_settings(self) -> None:
+        with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
+            self._put([{"key": "STOCK_LIST", "value": "600519,300750"}])
+
+        self.assertIn("STOCK_LIST=600519,300750", self.env_path.read_text(encoding="utf-8"))
+
+    def test_without_android_profile_fields_and_updates_behave_as_before(self) -> None:
+        with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ""}):
+            keys = self._schema_keys()
+            self.assertTrue(_ANDROID_SCHEDULER_KEYS <= keys)
+            self._put([{"key": "SCHEDULE_ENABLED", "value": "true"}])
+
+        self.assertTrue(_ANDROID_SCHEDULER_KEYS <= keys)
+        self.assertIn("SCHEDULE_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
