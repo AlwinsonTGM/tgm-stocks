@@ -10,6 +10,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 import java.io.File;
@@ -21,6 +22,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class MainActivity extends Activity {
+    // Android 13+ shows no notification, including the foreground service's,
+    // until the user grants this permission. The service still runs without it.
+    private static final int REQUEST_NOTIFICATIONS = 1;
     // The Loopback token: a random per-install secret the WebView presents to the
     // on-device backend. It lives in app-private preferences and is never logged.
     private static final String PREFS_NAME = "tgms_loopback";
@@ -67,8 +71,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33
+            && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATIONS);
+        }
+    }
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        requestNotificationPermission();
         TextView loading = new TextView(this);
         loading.setText("Starting...");
         setContentView(loading);
@@ -82,6 +94,12 @@ public class MainActivity extends Activity {
                 // backend reads the token from here before it starts.
                 py.getModule("os").get("environ").callAttr("__setitem__", TOKEN_ENV, token);
                 py.getModule("os").get("environ").callAttr("__setitem__", PLATFORM_ENV, ANDROID_PLATFORM);
+                // The foreground-service bridge: Python imports it as tgms_bridge
+                // and calls startRun()/stopRun() around an active analysis run.
+                // Chaquopy wraps the Java instance as a Python object, so it is
+                // stored in the module dict rather than in sys.modules.
+                PyObject bridge = py.getModule("java").callAttr("jclass", ForegroundServiceBridge.class.getName()).callAttr("getInstance");
+                py.getModule("sys").get("modules").callAttr("__setitem__", "tgms_bridge", bridge);
                 int port = py.getModule("bootstrap").callAttr("start", getFilesDir().getAbsolutePath()).toInt();
                 runOnUiThread(() -> {
                     LinearLayout content = new LinearLayout(this);

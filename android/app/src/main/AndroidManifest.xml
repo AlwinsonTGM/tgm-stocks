@@ -1,5 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Keeps a user-started analysis running while the app is backgrounded.
+         The run is dataSync work; the persistent notification is the service's
+         visible marker. No runtime permission is needed for either. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -19,5 +25,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".AnalysisForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <!-- Creates the foreground-service bridge with the application context
+             before any activity starts. It stores nothing. -->
+        <provider
+            android:name=".BridgeProvider"
+            android:authorities="${applicationId}.bridge"
+            android:exported="false" />
     </application>
 </manifest>

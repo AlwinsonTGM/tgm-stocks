@@ -594,22 +594,30 @@ def _handle_sync_analysis(
     """
     import uuid
     from src.services.analysis_service import AnalysisService
+    from src.services.run_foreground_service import begin_run, end_run
     
     query_id = uuid.uuid4().hex
     
     try:
         service = AnalysisService()
-        result = service.analyze_stock(
-            stock_code=stock_code,
-            report_type=request.report_type,
-            force_refresh=request.force_refresh,
-            query_id=query_id,
-            send_notification=getattr(request, "notify", True),
-            skills=getattr(request, "skills", None),
-            analysis_phase=request.analysis_phase,
-            report_language=getattr(request, "report_language", None),
-            analysis_target=analysis_target,
-        )
+        # Synchronous mode runs on the request thread, not in the task queue, so
+        # it holds the Android foreground service itself. Both calls are no-ops
+        # off Android.
+        begin_run()
+        try:
+            result = service.analyze_stock(
+                stock_code=stock_code,
+                report_type=request.report_type,
+                force_refresh=request.force_refresh,
+                query_id=query_id,
+                send_notification=getattr(request, "notify", True),
+                skills=getattr(request, "skills", None),
+                analysis_phase=request.analysis_phase,
+                report_language=getattr(request, "report_language", None),
+                analysis_target=analysis_target,
+            )
+        finally:
+            end_run()
 
         if result is None:
             error_message = service.last_error or f"分析股票 {stock_code} 失败"
@@ -676,36 +684,49 @@ def trigger_market_review(
         normalize_market_review_region_lenient(runtime_config.market_review_region) or "cn"
     )
 
-    lock_token = _try_acquire_market_review_lock(runtime_config)
-    if lock_token is None:
-        raise api_error(409, "duplicate_market_review", "大盘复盘正在执行中，请稍后再试")
+    from src.services.run_foreground_service import begin_run, end_run, run_in_background
 
+    # The queue only holds the Android foreground service while the worker
+    # runs, but a market review does its data fetching and report building
+    # before it hands a callable to the queue. The outer wrapper therefore
+    # covers preparation and the queued run as one active run; the inner one
+    # (inside submit_background_task) is balanced by the run counter.
+    begin_run()
     try:
-        task_id = uuid.uuid4().hex
-        logger.info(
-            "[MarketReview] component=market_review action=submit trigger_source=api "
-            "task_id=%s region=%s send_notification=%s",
-            task_id,
-            effective_region,
-            request.send_notification,
-        )
-        task = get_task_queue().submit_background_task(
-            lambda: _run_market_review_background(
+        lock_token = _try_acquire_market_review_lock(runtime_config)
+        if lock_token is None:
+            raise api_error(409, "duplicate_market_review", "大盘复盘正在执行中，请稍后再试")
+
+        try:
+            task_id = uuid.uuid4().hex
+            logger.info(
+                "[MarketReview] component=market_review action=submit trigger_source=api "
+                "task_id=%s region=%s send_notification=%s",
+                task_id,
+                effective_region,
                 request.send_notification,
-                effective_region=effective_region,
-                lock_token=lock_token,
-                config=runtime_config,
-                query_id=task_id,
-            ),
-            stock_code="market_review",
-            stock_name="大盘复盘",
-            message="大盘复盘任务已提交",
-            task_id=task_id,
-            region=effective_region,
-        )
-    except Exception:
-        _release_market_review_lock(lock_token)
-        raise
+            )
+            task = get_task_queue().submit_background_task(
+                run_in_background(
+                    lambda: _run_market_review_background(
+                        request.send_notification,
+                        effective_region=effective_region,
+                        lock_token=lock_token,
+                        config=runtime_config,
+                        query_id=task_id,
+                    )
+                ),
+                stock_code="market_review",
+                stock_name="大盘复盘",
+                message="大盘复盘任务已提交",
+                task_id=task_id,
+                region=effective_region,
+            )
+        except Exception:
+            _release_market_review_lock(lock_token)
+            raise
+    finally:
+        end_run()
 
     return MarketReviewAccepted(
         status="accepted",

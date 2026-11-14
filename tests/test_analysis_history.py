@@ -2591,7 +2591,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
     def test_empty_news_state_round_trips_through_history_markdown(self) -> None:
         """持久化、重建和历史 Markdown 必须保留三态披露。"""
-        no_channel = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+        no_channel = (
+            "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+            "可在「设置 → 搜索服务」中配置 Tavily、Brave 或自建 SearXNG。"
+        )
         zero_hit = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
         service = HistoryService(self.db)
 
@@ -2644,7 +2647,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
     def test_legacy_history_without_news_count_stays_silent(self) -> None:
         """旧记录缺少计数字段时状态未知，不能倒推为未配置渠道。"""
-        no_channel = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+        no_channel = (
+            "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+            "可在「设置 → 搜索服务」中配置 Tavily、Brave 或自建 SearXNG。"
+        )
         zero_hit = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
         record_id = self.db.save_analysis_history(
             result=self._build_result(),

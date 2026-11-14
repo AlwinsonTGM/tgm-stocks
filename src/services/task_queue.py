@@ -34,6 +34,7 @@ from src.services.run_diagnostics import (
     reset_run_diagnostic_context,
 )
 from src.utils.analysis_metadata import SELECTION_SOURCES
+from src.services.run_foreground_service import run_in_background
 from src.services.stock_code_utils import resolve_index_stock_code_for_analysis
 
 logger = logging.getLogger(__name__)
@@ -523,8 +524,10 @@ class AnalysisTaskQueue:
                 self._analyzing_stocks[dedupe_key] = task_id
 
                 try:
+                    # The wrapper is a no-op off Android; on Android it holds the
+                    # foreground service for as long as the worker runs the task.
                     future = self.executor.submit(
-                        self._execute_task,
+                        run_in_background(self._execute_task),
                         task_id,
                         stock_code,
                         report_type,
@@ -587,7 +590,11 @@ class AnalysisTaskQueue:
                 raise ValueError(f"任务 ID 已存在: {task_id}")
             self._tasks[task_id] = task_info
             try:
-                future = self.executor.submit(self._execute_background_task, task_id, run_task)
+                future = self.executor.submit(
+                    run_in_background(self._execute_background_task),
+                    task_id,
+                    run_task,
+                )
             except Exception:
                 del self._tasks[task_id]
                 raise

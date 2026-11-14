@@ -111,6 +111,44 @@ config API rejects any attempt to write them with a 400 error naming the
 feature as unavailable on Android. When the variable is unset (desktop, tests)
 nothing changes.
 
+## Foreground service for an active run
+
+Android may freeze or kill a backgrounded app, which would cut off an analysis
+the user just started. While a run is active the app therefore runs
+`AnalysisForegroundService` with a persistent notification, so switching to
+another app does not lose the run (ADR-0006: only a run the user started;
+scheduled execution stays off).
+
+The Python side is `src/services/run_foreground_service.py`. It counts active
+runs and calls `startRun()` / `stopRun()` on the Java bridge
+`ForegroundServiceBridge`, which `MainActivity` installs as the Chaquopy module
+`tgms_bridge` before the backend starts. The service starts when the count goes
+from zero to one and stops when it returns to zero.
+
+The hook is inert unless `TGMS_PLATFORM=android`, and a missing bridge only logs
+a warning, so desktop, Docker and tests behave exactly as before. It is wired to
+the task lifecycle, not to polling:
+
+- `AnalysisTaskQueue.submit_tasks_batch` and `submit_background_task` wrap the
+  callable they hand to the worker pool, so a run is active from the moment the
+  worker picks the task up until it returns, succeeds or fails.
+- The synchronous `/analyze` path runs on the request thread and never reaches
+  the queue, so it holds the run itself.
+- The market review prepares its data before it queues work, so its endpoint
+  holds a run from submission until the queued run finishes.
+
+The notification is generic ("Analysis in progress"). It never names a stock, a
+portfolio holding or an API key. On Android 13+ the app asks for
+`POST_NOTIFICATIONS` on first launch; without it the service still runs but the
+notification is not shown.
+
+To watch it on a device:
+
+```bash
+adb logcat -s TGMStocks ActivityManager | grep -i analysisforegroundservice
+adb shell dumpsys activity services io.github.alwinsontgm.stocks
+```
+
 ## Wheels
 
 Compiled dependencies are cross-built for `android_24_arm64_v8a` and committed

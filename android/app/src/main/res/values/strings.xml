@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">TGM Stocks</string>
+    <!-- Foreground service shown while an analysis the user started is running.
+         Deliberately generic: the notification never names a stock, a portfolio
+         or a key. -->
+    <string name="analysis_service_channel_name">Analysis in progress</string>
+    <string name="analysis_service_channel_description">Shown while TGM Stocks is analysing, so the run is not stopped when you switch apps.</string>
+    <string name="analysis_service_title">Analysis in progress</string>
+    <string name="analysis_service_text">TGM Stocks keeps running so your report is not lost.</string>
 </resources>
