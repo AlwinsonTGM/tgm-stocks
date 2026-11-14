@@ -105,10 +105,13 @@ class FutuFetcher(BaseFetcher):
             return self._available
         try:
             import futu  # noqa: F401
-            self._available = self.has_configured_endpoint()
         except ImportError:
+            # The SDK is optional (the Android release build drops it): report the
+            # provider as unavailable instead of sending requests it cannot serve.
             self._available = False
             logger.warning("[Futu] futu-api 未安装")
+            return self._available
+        self._available = self.has_configured_endpoint()
         return self._available
 
     def _in_connect_cooldown(self) -> bool:

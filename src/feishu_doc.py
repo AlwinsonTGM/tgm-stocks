@@ -2,12 +2,21 @@
 # -*- coding: utf-8 -*-
 import logging
 import json
-import lark_oapi as lark
-from lark_oapi.api.docx.v1 import *
 from typing import List, Dict, Any, Optional
 from src.config import get_config
 
 logger = logging.getLogger(__name__)
+
+# lark-oapi 是可选依赖：Android 发布构建不打包它，此时飞书云文档功能不可用，
+# 但模块本身必须仍可导入，避免拖垮启动链路。
+try:
+    import lark_oapi as lark
+    from lark_oapi.api.docx.v1 import *
+    LARK_SDK_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised by the trimmed Android build
+    lark = None
+    LARK_SDK_AVAILABLE = False
+    logger.warning("[FeishuDoc] lark-oapi SDK 未安装，飞书云文档功能不可用")
 
 
 class FeishuDocManager:
@@ -21,7 +30,9 @@ class FeishuDocManager:
 
         # 初始化 SDK 客户端
         # SDK 会自动处理 tenant_access_token 的获取和刷新，无需人工干预
-        if self.is_configured():
+        if not LARK_SDK_AVAILABLE:
+            self.client = None
+        elif self.is_configured():
             self.client = lark.Client.builder() \
                 .app_id(self.app_id) \
                 .app_secret(self.app_secret) \
@@ -39,7 +50,10 @@ class FeishuDocManager:
         创建日报文档
         """
         if not self.client or not self.is_configured():
-            logger.warning("飞书 SDK 未初始化或配置缺失，跳过创建")
+            if not LARK_SDK_AVAILABLE:
+                logger.warning("lark-oapi SDK 未安装，跳过创建飞书云文档")
+            else:
+                logger.warning("飞书 SDK 未初始化或配置缺失，跳过创建")
             return None
 
         try:

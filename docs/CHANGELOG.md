@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Android 发布构建裁剪依赖：去掉 `longbridge`、`futu-api`、`lark-oapi` 与 `newspaper3k`（连带 `jieba`、`nltk`），APK 从 164.6 MiB 降到 118.1 MiB；券商持仓导入（Futu / Longbridge）、飞书应用机器人与飞书云文档在 Android 上不可用，新闻正文改为 bs4 提取，桌面端行为不变。
 - [改进] 配置 API 对注册表中所有敏感字段（LLM / 搜索 / 通知密钥、令牌、Webhook 等）统一返回掩码 `******` 并置 `is_masked`，不再把已保存的密钥明文回传给 Web UI；设置页以密码框展示，需用户主动点击眼睛图标才显示本次输入的内容，保存时提交掩码即保留原值（ADR-0004，`docs/security/android-threat-model.md`）。
 - [改进] TGM Stocks Android Manifest 关闭自动备份（`allowBackup=false`、`fullBackupContent=false`），并为 Android 12+ 新增 `dataExtractionRules`，在云备份与设备迁移中排除全部应用私有数据，API Key 与 Loopback token 不再可能随备份离开设备。
 - [修复] 搜索服务在 key 报错时不再把密钥前 8 位写入 WARNING 日志，只记录 key 序号，避免密钥片段进入 logcat。

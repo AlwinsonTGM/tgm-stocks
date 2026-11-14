@@ -64,6 +64,12 @@ Both scripts:
 
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
+The packaging contract test (`tests/test_android_apk_contract.py`) reads that
+APK when it exists and fails on a wrong identity, a bundled secret, or dead
+weight left in the archive. A build over an existing tree can leave a replaced
+entry behind; run `./gradlew clean` before measuring a size you intend to
+record.
+
 ## Loopback token
 
 The on-device backend listens on `127.0.0.1` on an OS-assigned port, which any
@@ -114,7 +120,30 @@ indexes. `app/src/main/jniLibs/arm64-v8a/libc++_shared.so` (NDK r27d) is
 bundled because `tokenizers` links against it.
 
 `app/requirements-android.txt` is the Android variant of the root
-`requirements.txt`; its comments state each deliberate difference.
+`requirements.txt`; its comments state each deliberate difference. It drops
+`longbridge`, `futu-api`, `lark-oapi` and `newspaper3k` (ADR-0005), and no
+wheel for those packages is kept: broker quotes and portfolio import, the
+Feishu app bot and cloud documents, and newspaper3k's article extraction are
+unavailable in the Android build. Article text is extracted with bs4 instead,
+so `beautifulsoup4` and `lxml` are listed explicitly.
+
+### Dependency trim
+
+The debug APK measures **118.1 MiB** (123,848,554 bytes) with the trimmed set,
+down from 164.6 MiB (172,601,575 bytes) with the full set. Measure a new value
+after any dependency change and record it in the release notes.
+
+Every optional SDK is imported inside the code that uses it and guarded, so a
+missing package degrades to an unavailable feature rather than an import error:
+
+- `longbridge` and `futu` are imported only inside their providers, which
+  report themselves unavailable without the SDK.
+- `lark_oapi` is guarded in the notification sender, the Feishu stream bot and
+  `src/feishu_doc.py`.
+- `newspaper3k` is guarded in `src/search_service.py`, which falls back to bs4.
+
+`scripts/check_android_imports.py` proves the backend still imports with those
+packages made unimportable, and extracts article text through the fallback.
 
 ## Icons
 

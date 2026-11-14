@@ -477,8 +477,16 @@ class LongbridgeFetcher(BaseFetcher):
         return True
 
     def _is_available(self) -> bool:
-        """Check if Longbridge credentials are configured (OAuth or Legacy)."""
+        """Check if the SDK is installed and Longbridge credentials are configured."""
         if self._available is not None:
+            return self._available
+        try:
+            import longbridge.openapi  # noqa: F401
+        except ImportError:
+            # The SDK is optional (the Android release build drops it): report the
+            # provider as unavailable instead of sending requests it cannot serve.
+            self._available = False
+            logger.warning("[Longbridge] longbridge SDK 未安装")
             return self._available
         try:
             from src.config import get_config

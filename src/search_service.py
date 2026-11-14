@@ -24,7 +24,6 @@ from typing import List, Dict, Any, Optional, Tuple
 from itertools import cycle
 from urllib.parse import parse_qsl, unquote, urlparse
 import requests
-from newspaper import Article, Config
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -46,6 +45,20 @@ from src.data.stock_mapping import (
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
 
 logger = logging.getLogger(__name__)
+
+# newspaper3k is optional: the Android release build drops it (with jieba and
+# nltk) and extracts article text with the bs4 fallback below instead.
+try:
+    from newspaper import Article as _NewspaperArticle
+    from newspaper import Config as _NewspaperConfig
+except ImportError:  # pragma: no cover - exercised through the fallback path
+    _NewspaperArticle = None
+    _NewspaperConfig = None
+
+try:
+    from bs4 import BeautifulSoup as _BeautifulSoup
+except ImportError:  # pragma: no cover - bs4 ships with the app
+    _BeautifulSoup = None
 
 _SEARCH_TIMEOUT_PROCESS_START_METHOD = "spawn"
 _SEARCH_TIMEOUT_PROCESS_JOIN_GRACE_SECONDS = 1.0
@@ -211,33 +224,115 @@ def _get_with_retry(
     return requests.get(url, headers=headers, params=params, timeout=timeout)
 
 
+_ARTICLE_USER_AGENT = (
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+)
+# Tags whose text is navigation or boilerplate rather than article body.
+_BS4_NOISE_TAGS = (
+    'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside', 'form',
+    'iframe', 'svg', 'button', 'template',
+)
+# Containers that usually hold the body; the first one with enough text wins.
+_BS4_BODY_SELECTORS = (
+    'article',
+    '[role="main"]',
+    'main',
+    '.article-content', '.article-body', '.article_content', '.article_body',
+    '.post-content', '.entry-content', '.content', '#content',
+)
+_BS4_MIN_BODY_CHARS = 80
+_ARTICLE_MAX_CHARS = 1500
+
+
+def _normalize_article_text(text: str) -> str:
+    """Collapse blank lines so the preview stays compact."""
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    return '\n'.join(lines)
+
+
+def _extract_article_text_with_bs4(html: str) -> str:
+    """Extract readable article text from HTML with bs4.
+
+    Picks the first body-like container with enough text, else the paragraph
+    text, and falls back to the whole document when a page is one text blob.
+    """
+    if not html or _BeautifulSoup is None:
+        return ""
+    try:
+        soup = _BeautifulSoup(html, 'lxml')
+    except Exception:
+        soup = _BeautifulSoup(html, 'html.parser')
+
+    for tag in soup(_BS4_NOISE_TAGS):
+        tag.decompose()
+
+    candidates = []
+    for selector in _BS4_BODY_SELECTORS:
+        try:
+            candidates.extend(soup.select(selector))
+        except Exception:
+            continue
+    candidates.append(soup.body or soup)
+
+    for candidate in candidates:
+        text = _normalize_article_text(candidate.get_text('\n'))
+        if len(text) >= _BS4_MIN_BODY_CHARS:
+            return text
+
+    paragraphs = _normalize_article_text(
+        '\n'.join(p.get_text(' ') for p in soup.find_all('p'))
+    )
+    if paragraphs:
+        return paragraphs
+    return _normalize_article_text(soup.get_text('\n'))
+
+
+def _fetch_url_content_with_newspaper(url: str, timeout: int) -> str:
+    """Fetch and parse article text with newspaper3k."""
+    if _NewspaperArticle is None or _NewspaperConfig is None:
+        return ""
+    config = _NewspaperConfig()
+    config.browser_user_agent = _ARTICLE_USER_AGENT
+    config.request_timeout = timeout
+    config.fetch_images = False  # 不下载图片
+    config.memoize_articles = False  # 不缓存
+
+    article = _NewspaperArticle(url, config=config, language='zh')  # 默认中文，但也支持其他
+    article.download()
+    article.parse()
+    return _normalize_article_text(article.text.strip())
+
+
+def _fetch_url_content_with_bs4(url: str, timeout: int) -> str:
+    """Fetch the page and extract its article text with bs4."""
+    if _BeautifulSoup is None:
+        return ""
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers={'User-Agent': _ARTICLE_USER_AGENT},
+    )
+    response.raise_for_status()
+    response.encoding = response.encoding or response.apparent_encoding
+    return _extract_article_text_with_bs4(response.text)
+
+
 def fetch_url_content(url: str, timeout: int = 5) -> str:
     """
-    获取 URL 网页正文内容 (使用 newspaper3k)
+    获取 URL 网页正文内容
+
+    优先使用 newspaper3k；未安装时（Android 发布构建）回退到 bs4 正文提取。
     """
-    try:
-        # 配置 newspaper3k
-        config = Config()
-        config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        config.request_timeout = timeout
-        config.fetch_images = False  # 不下载图片
-        config.memoize_articles = False # 不缓存
-
-        article = Article(url, config=config, language='zh') # 默认中文，但也支持其他
-        article.download()
-        article.parse()
-
-        # 获取正文
-        text = article.text.strip()
-
-        # 简单的后处理，去除空行
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        text = '\n'.join(lines)
-
-        return text[:1500]  # 限制返回长度（比 bs4 稍微多一点，因为 newspaper 解析更干净）
-    except Exception as e:
-        logger.debug(f"Fetch content failed for {url}: {e}")
-
+    extractors = [_fetch_url_content_with_newspaper, _fetch_url_content_with_bs4]
+    for extractor in extractors:
+        try:
+            text = extractor(url, timeout)
+        except Exception as e:
+            logger.debug(f"Fetch content failed for {url} via {extractor.__name__}: {e}")
+            continue
+        if text:
+            return text[:_ARTICLE_MAX_CHARS]
     return ""
 
 

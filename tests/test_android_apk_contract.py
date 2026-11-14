@@ -31,10 +31,10 @@ EXPECTED_MIN_SDK = 24
 EXPECTED_TARGET_SDK = 36
 EXPECTED_ABIS = ("arm64-v8a",)
 
-# The zip central directory plus local headers of a 164 MiB APK measure about
-# 200 KiB. 2 MiB leaves room for that and for a future signature block while
-# still catching the regression that produced a 290 MiB APK from a 164 MiB
-# payload (126 MiB of orphaned data).
+# The zip central directory, local headers and the APK Signing Block of a
+# 121 MiB APK measure about 200 KiB. 2 MiB leaves room for growth while still
+# catching the regression that produced a 290 MiB APK from a 164 MiB payload
+# (126 MiB of dead data).
 MAX_ORPHANED_BYTES = 2 * 1024 * 1024
 
 # Files that must never ship inside the APK: user secrets and local databases.
@@ -60,6 +60,7 @@ class ApkFacts:
     entry_names: tuple[str, ...]
     file_size: int
     entry_compressed_bytes: int
+    orphaned_bytes: int = 0
 
 
 @dataclass
@@ -121,10 +122,9 @@ def check_apk_contract(facts: ApkFacts, variant: str | None = None) -> ContractR
         if any(pattern.search(name) for pattern in FORBIDDEN_ENTRY_PATTERNS):
             report.fail(f"forbidden file inside the APK: {name}")
 
-    orphaned = facts.file_size - facts.entry_compressed_bytes
-    if orphaned > MAX_ORPHANED_BYTES:
+    if facts.orphaned_bytes > MAX_ORPHANED_BYTES:
         report.fail(
-            f"archive carries {orphaned} bytes not accounted for by its entries "
+            f"archive carries {facts.orphaned_bytes} bytes that belong to no entry "
             f"(file {facts.file_size}, entries {facts.entry_compressed_bytes}, "
             f"limit {MAX_ORPHANED_BYTES})"
         )
@@ -205,6 +205,27 @@ def _parse_allow_backup(xmltree_output: str) -> bool | None:
     return None
 
 
+def _read_orphaned_bytes(apk_path: Path) -> int:
+    """Return bytes in the archive that belong to no zip entry.
+
+    Walks the local headers in file order, so the gap left by a replaced entry
+    counts as orphaned even when a later entry reuses the same offset. The APK
+    Signing Block sits before the central directory and is not a gap.
+    """
+    with zipfile.ZipFile(apk_path) as archive:
+        entries = sorted(archive.infolist(), key=lambda info: info.header_offset)
+
+    orphaned = 0
+    cursor = 0
+    for info in entries:
+        local_header_size = 30 + len(info.filename.encode()) + len(info.extra)
+        start = info.header_offset
+        if start > cursor:
+            orphaned += start - cursor
+        cursor = max(cursor, start + local_header_size + info.compress_size)
+    return orphaned
+
+
 def read_apk_facts(apk_path: Path, aapt2: Path) -> ApkFacts:
     """Read the manifest and archive layout of one built APK."""
     badging = _parse_badging(_run_aapt2(aapt2, "dump", "badging", str(apk_path)))
@@ -230,6 +251,7 @@ def read_apk_facts(apk_path: Path, aapt2: Path) -> ApkFacts:
         entry_names=entry_names,
         file_size=apk_path.stat().st_size,
         entry_compressed_bytes=entry_compressed_bytes,
+        orphaned_bytes=_read_orphaned_bytes(apk_path),
     )
 
 
@@ -267,6 +289,7 @@ def _facts(**overrides: object) -> ApkFacts:
         entry_names=("AndroidManifest.xml", "classes.dex"),
         file_size=1_000_000,
         entry_compressed_bytes=1_000_000 - 4096,
+        orphaned_bytes=2048,
     )
     base.update(overrides)
     return ApkFacts(**base)  # type: ignore[arg-type]
@@ -286,7 +309,7 @@ def _facts(**overrides: object) -> ApkFacts:
         {"debuggable": False},
         {"entry_names": ("AndroidManifest.xml", "assets/python/.env")},
         {"entry_names": ("AndroidManifest.xml", "data/stocks.db")},
-        {"file_size": 1_000_000 + MAX_ORPHANED_BYTES + 1},
+        {"orphaned_bytes": MAX_ORPHANED_BYTES + 1},
     ],
 )
 def test_contract_check_reports_deliberate_violations(overrides: dict[str, object]) -> None:
@@ -298,6 +321,39 @@ def test_contract_check_reports_deliberate_violations(overrides: dict[str, objec
 
 def test_contract_check_accepts_a_conforming_apk() -> None:
     assert check_apk_contract(_facts()).ok
+
+
+def test_contract_check_accepts_a_signed_apk_with_a_signing_block() -> None:
+    # A signed APK stores v2/v3 signatures between the last entry and the
+    # central directory, outside every zip entry.
+    report = check_apk_contract(
+        _facts(file_size=1_000_000, entry_compressed_bytes=1_000_000 - 3_400_000)
+    )
+
+    assert report.ok, report.failures
+
+
+def test_orphaned_bytes_ignores_the_signing_block_and_counts_replaced_entries(tmp_path: Path) -> None:
+    import zipfile
+
+    apk = tmp_path / "app-debug.apk"
+    with zipfile.ZipFile(apk, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr("classes.dex", b"a" * 100)
+        archive.writestr("AndroidManifest.xml", b"b" * 100)
+
+    # A clean archive has no gaps.
+    assert _read_orphaned_bytes(apk) == 0
+
+    # Simulate the regression: a replaced entry leaves its old bytes behind and
+    # the next entry is appended after them.
+    data = apk.read_bytes()
+    first_header = data.index(b"PK\x03\x04")
+    second_header = data.index(b"PK\x03\x04", first_header + 4)
+    stale = data[first_header:second_header]
+    rewritten = data[:second_header] + stale + data[second_header:]
+    apk.write_bytes(rewritten)
+
+    assert _read_orphaned_bytes(apk) == len(stale)
 
 
 def test_contract_check_requires_non_debuggable_release() -> None:
