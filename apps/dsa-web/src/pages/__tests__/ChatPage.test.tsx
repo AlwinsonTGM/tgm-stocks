@@ -1342,7 +1342,7 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByDisplayValue('请深入分析 贵州茅台(600519)')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze 贵州茅台(600519) in depth')).toBeInTheDocument();
 
     const sendButton = screen.getByRole('button', { name: /发送|处理中\.\.\./ });
     expect(sendButton).not.toBeDisabled();
@@ -1353,7 +1353,7 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(mockStartStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '请深入分析 贵州茅台(600519)',
+          message: 'Analyze 贵州茅台(600519) in depth',
           context: {
             stock_code: '600519',
             stock_name: '贵州茅台',
@@ -1455,7 +1455,7 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByDisplayValue('请深入分析 贵州茅台(600519)')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze 贵州茅台(600519) in depth')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.queryByText('正在加载历史分析上下文；现在可直接发送追问。')).not.toBeInTheDocument();
@@ -1466,7 +1466,7 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(mockStartStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '请深入分析 贵州茅台(600519)',
+          message: 'Analyze 贵州茅台(600519) in depth',
           context: expect.objectContaining({
             stock_code: '600519',
             stock_name: '贵州茅台',
@@ -1491,14 +1491,14 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByDisplayValue('请深入分析 AAPL')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze AAPL in depth')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
     await waitFor(() => {
       expect(mockStartStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '请深入分析 AAPL',
+          message: 'Analyze AAPL in depth',
           context: {
             stock_code: 'AAPL',
             stock_name: null,
@@ -1537,7 +1537,7 @@ describe('ChatPage', () => {
     ];
     mockStoreState.stateContract = 'authoritative';
     render(<MemoryRouter initialEntries={['/chat?stock=AAPL&name=Apple']}><ChatPage /></MemoryRouter>);
-    const input = await screen.findByDisplayValue('请深入分析 Apple(AAPL)');
+    const input = await screen.findByDisplayValue('Analyze Apple(AAPL) in depth');
     expect(screen.getByLabelText('当前讨论对象')).toHaveTextContent('未确认');
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
     await waitFor(() => expect(mockStartStream).toHaveBeenCalledTimes(1));
@@ -1593,14 +1593,14 @@ describe('ChatPage', () => {
 
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByDisplayValue('请深入分析 贵州茅台(600519)')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze 贵州茅台(600519) in depth')).toBeInTheDocument();
     expect(screen.getByText('正在加载历史分析上下文；现在可直接发送追问。')).toBeInTheDocument();
 
     await act(async () => {
       await router.navigate('/chat?stock=AAPL&name=Apple&recordId=2');
     });
 
-    expect(await screen.findByDisplayValue('请深入分析 Apple(AAPL)')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze Apple(AAPL) in depth')).toBeInTheDocument();
 
     firstDeferred.resolve({
       meta: {
@@ -1655,7 +1655,7 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(mockStartStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '请深入分析 Apple(AAPL)',
+          message: 'Analyze Apple(AAPL) in depth',
           context: expect.objectContaining({
             stock_code: 'AAPL',
             stock_name: 'Apple',
@@ -1684,7 +1684,7 @@ describe('ChatPage', () => {
       </MemoryRouter>,
     );
 
-    const expectedPrompt = `请深入分析 ${expectedCanonical}`;
+    const expectedPrompt = `Analyze ${expectedCanonical} in depth`;
     expect(await screen.findByDisplayValue(expectedPrompt)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
@@ -1717,7 +1717,7 @@ describe('ChatPage', () => {
         <ChatPage />
       </MemoryRouter>,
     );
-    expect(screen.queryByDisplayValue(/请深入分析/)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue(/Analyze .* in depth/)).not.toBeInTheDocument();
 
     mockStockIndexState.index = mockStockIndex;
     mockStockIndexState.loading = false;
@@ -1728,7 +1728,7 @@ describe('ChatPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByDisplayValue('请深入分析 sh000016')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Analyze sh000016 in depth')).toBeInTheDocument();
   });
 
   type RegistrySettleRow = [
@@ -1741,17 +1741,17 @@ describe('ChatPage', () => {
     [
       'success settle with index data',
       { index: mockStockIndex, error: null, fallback: false },
-      '请深入分析 sh000016',
+      'Analyze sh000016 in depth',
     ],
     [
       'explicit load failure fail-open',
       { index: [], error: new Error('registry unavailable'), fallback: true },
-      '请深入分析 SH000016',
+      'Analyze SH000016 in depth',
     ],
     [
       'successful-empty registry fail-open',
       { index: [], error: null, fallback: false },
-      '请深入分析 SH000016',
+      'Analyze SH000016 in depth',
     ],
   ])(
     'releases the default-backend index follow-up after the shared registry settles: %s',
@@ -1769,7 +1769,7 @@ describe('ChatPage', () => {
       );
 
       await waitFor(() => {
-        expect(screen.queryByDisplayValue(/请深入分析 (SH000016|sh000016)/)).not.toBeInTheDocument();
+        expect(screen.queryByDisplayValue(/Analyze (SH000016|sh000016) in depth/)).not.toBeInTheDocument();
       });
 
       // Settle regardless of outcome: success consumes the registry canonical;

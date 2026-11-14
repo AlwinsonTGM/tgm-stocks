@@ -38,6 +38,7 @@ export const HistoryListItem: React.FC<HistoryListItemProps> = ({
   );
   const phaseLabel = getMarketPhaseSummaryLabel(item.marketPhaseSummary, language)
     ?.replace('市场阶段: ', '')
+      .replace('Market phase: ', '')
     .replace('市场阶段：', '')
     .replace('Market phase: ', '');
 

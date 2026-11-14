@@ -27,6 +27,7 @@ import {
 } from '../components/settings';
 import { WEB_BUILD_INFO } from '../utils/constants';
 import { parseStockListValue } from '../utils/stockList';
+import { localizeSetupCheck } from '../utils/setupCheckLabels';
 import { getCategoryDescription, getCategoryTitle } from '../utils/systemConfigI18n';
 import type {
   ConfigValidationIssue,
@@ -196,11 +197,15 @@ type FirstRunSetupCardProps = {
   isRunningSmoke: boolean;
   smokeError: ParsedApiError | null;
   smokeSuccess: string;
+  isVerifyingLlm: boolean;
+  llmVerifyResult: { success: boolean; message: string } | null;
+  onVerifyLlm: () => void | Promise<void>;
   onRefresh: () => void | Promise<void>;
   onSelectCategory: (category: SystemConfigCategory) => void;
   onEditStockList: () => void;
   onRunSmoke: () => void | Promise<void>;
   listSeparator: string;
+  language: UiLanguage;
   t: (key: UiTextKey, params?: Record<string, string | number>) => string;
 };
 
@@ -213,11 +218,15 @@ const FirstRunSetupCard: React.FC<FirstRunSetupCardProps> = ({
   isRunningSmoke,
   smokeError,
   smokeSuccess,
+  isVerifyingLlm,
+  llmVerifyResult,
+  onVerifyLlm,
   onRefresh,
   onSelectCategory,
   onEditStockList,
   onRunSmoke,
   listSeparator,
+  language,
   t,
 }) => {
   const [isHidden, setIsHidden] = useState(false);
@@ -238,7 +247,10 @@ const FirstRunSetupCard: React.FC<FirstRunSetupCardProps> = ({
     : requiredMissing.length
       ? t('settings.setupGuideMissingSummary', {
         count: requiredMissing.length,
-        labels: requiredMissing.slice(0, 3).map((check) => check.title).join(listSeparator),
+        labels: requiredMissing
+          .slice(0, 3)
+          .map((check) => localizeSetupCheck(check, language).title)
+          .join(listSeparator),
       })
       : t('settings.setupGuideReadySummary');
 
@@ -300,29 +312,56 @@ const FirstRunSetupCard: React.FC<FirstRunSetupCardProps> = ({
 
         {status ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {status.checks.map((check) => (
-              <div
-                key={check.key}
-                className="rounded-2xl border settings-border bg-card/65 px-4 py-3"
-              >
-                <div className="flex items-start gap-3">
-                  {getSetupCheckIcon(check)}
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">{check.title}</p>
-                      <span className="rounded-full border settings-border bg-background/60 px-2 py-0.5 text-[11px] font-medium text-muted-text">
-                        {getSetupCheckStatusLabel(check, t)}
-                      </span>
+            {status.checks.map((check) => {
+              const localized = localizeSetupCheck(check, language);
+              return (
+                <div
+                  key={check.key}
+                  className="rounded-2xl border settings-border bg-card/65 px-4 py-3"
+                >
+                  <div className="flex items-start gap-3">
+                    {getSetupCheckIcon(check)}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{localized.title}</p>
+                        <span className="rounded-full border settings-border bg-background/60 px-2 py-0.5 text-[11px] font-medium text-muted-text">
+                          {getSetupCheckStatusLabel(check, t)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-muted-text">{localized.message}</p>
+                      {localized.nextStep ? (
+                        <p className="mt-2 text-xs leading-5 text-secondary-text">{localized.nextStep}</p>
+                      ) : null}
+                      {check.key === 'llm_primary' && check.status === 'configured' ? (
+                        <Button
+                          type="button"
+                          variant="settings-secondary"
+                          size="sm"
+                          className="mt-2"
+                          disabled={isVerifyingLlm}
+                          isLoading={isVerifyingLlm}
+                          loadingText={t('settings.setupGuideVerifyLlmRunning')}
+                          onClick={() => void onVerifyLlm()}
+                        >
+                          {t('settings.setupGuideVerifyLlm')}
+                        </Button>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-muted-text">{check.message}</p>
-                    {check.nextStep ? (
-                      <p className="mt-2 text-xs leading-5 text-secondary-text">{check.nextStep}</p>
-                    ) : null}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        ) : null}
+
+        {llmVerifyResult ? (
+          <SettingsAlert
+            title={llmVerifyResult.success
+              ? t('settings.setupGuideVerifyLlmPassedTitle')
+              : t('settings.setupGuideVerifyLlmFailedTitle')}
+            message={llmVerifyResult.message}
+            variant={llmVerifyResult.success ? 'success' : 'error'}
+          />
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
@@ -331,6 +370,9 @@ const FirstRunSetupCard: React.FC<FirstRunSetupCardProps> = ({
           </Button>
           <Button type="button" variant="settings-secondary" size="sm" onClick={() => onEditStockList()}>
             {t('settings.setupGuideAddStocks')}
+          </Button>
+          <Button type="button" variant="settings-secondary" size="sm" onClick={() => onSelectCategory('search')}>
+            {t('settings.setupGuideConfigureSearch')}
           </Button>
           <Button type="button" variant="settings-secondary" size="sm" onClick={() => onSelectCategory('notification')}>
             {t('settings.setupGuideConfigureNotification')}
@@ -706,6 +748,8 @@ const SettingsPage: React.FC = () => {
   const [isRunningSetupSmoke, setIsRunningSetupSmoke] = useState(false);
   const [setupSmokeError, setSetupSmokeError] = useState<ParsedApiError | null>(null);
   const [setupSmokeSuccess, setSetupSmokeSuccess] = useState('');
+  const [isVerifyingLlm, setIsVerifyingLlm] = useState(false);
+  const [llmVerifyResult, setLlmVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [localDraftResetToken, setLocalDraftResetToken] = useState(0);
   const [llmChannelHasDirty, setLlmChannelHasDirty] = useState(false);
   const [llmChannelIsSaving, setLlmChannelIsSaving] = useState(false);
@@ -853,7 +897,9 @@ const SettingsPage: React.FC = () => {
   const firstSetupStockCode = parseSetupStockList(getConfigItem(itemsByCategory.base || [], 'STOCK_LIST')?.value)[0] || '';
   const screeningItem = (itemsByCategory.base || []).find((item) => item.key === 'SCREENING_ENABLED');
   const screeningEnabled = String(screeningItem?.value ?? '').trim().toLowerCase() === 'true';
-  const shouldShowFirstRunSetup = activeCategory === 'base';
+  // The setup card also renders on the search category so the news-search check
+  // sits next to the fields that fix it.
+  const shouldShowFirstRunSetup = activeCategory === 'base' || activeCategory === 'search';
   const shouldShowScreeningSettings = activeCategory === 'base' && Boolean(screeningItem);
   const hasConfiguredChannels = Boolean((rawActiveItemMap.get('LLM_CHANNELS') || '').trim()
     || (rawActiveItemMap.get('MODELFLARE_KEY') || '').trim());
@@ -1206,6 +1252,33 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // Setup status only proves a model and key are present, not that the provider
+  // accepts them. This runs the same fixed-prompt smoke test as the AI model
+  // panel, against saved config, so a dead key cannot look ready.
+  const handleVerifyLlmChannel = async () => {
+    setLlmVerifyResult(null);
+    setIsVerifyingLlm(true);
+    try {
+      const result = await systemConfigApi.testGenerationBackend({
+        mode: 'text',
+        items: [],
+      });
+      setLlmVerifyResult({
+        success: result.success,
+        message: result.message || (result.success
+          ? t('settings.setupGuideVerifyLlmPassed')
+          : t('settings.setupGuideVerifyLlmFailedMessage')),
+      });
+    } catch (error: unknown) {
+      setLlmVerifyResult({
+        success: false,
+        message: getParsedApiError(error).message,
+      });
+    } finally {
+      setIsVerifyingLlm(false);
+    }
+  };
+
   const shouldGuardActiveConfigPanel = activeCategory === 'notification' || activeCategory === 'agent';
   const activeConfigPanelErrorTitle = activeCategory === 'agent' ? t('settings.agentSettings') : t('settings.notificationSettings');
   const settingsPanelDiagnosticHint = isDesktopRuntime
@@ -1360,11 +1433,15 @@ const SettingsPage: React.FC = () => {
                 isRunningSmoke={isRunningSetupSmoke}
                 smokeError={setupSmokeError}
                 smokeSuccess={setupSmokeSuccess}
+                isVerifyingLlm={isVerifyingLlm}
+                llmVerifyResult={llmVerifyResult}
+                onVerifyLlm={handleVerifyLlmChannel}
                 onRefresh={refreshSetupStatus}
                 onSelectCategory={setActiveCategory}
                 onEditStockList={handleEditSetupStockList}
                 onRunSmoke={handleRunSetupSmoke}
                 listSeparator={uiLanguage === 'en' ? ', ' : '、'}
+                language={uiLanguage}
                 t={t}
               />
             ) : null}

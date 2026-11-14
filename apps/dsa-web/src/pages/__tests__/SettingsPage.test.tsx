@@ -45,6 +45,7 @@ const {
   getSetupStatus,
   importEnv,
   runSchedulerNow,
+  testGenerationBackend,
   updateSystemConfig,
   screeningEnable,
   notifyScreeningConfigChanged,
@@ -76,6 +77,7 @@ const {
   getSetupStatus: vi.fn(),
   importEnv: vi.fn(),
   runSchedulerNow: vi.fn(),
+  testGenerationBackend: vi.fn(),
   updateSystemConfig: vi.fn(),
   screeningEnable: vi.fn(),
   notifyScreeningConfigChanged: vi.fn(),
@@ -126,6 +128,7 @@ vi.mock('../../api/systemConfig', () => ({
     getSetupStatus: (...args: unknown[]) => getSetupStatus(...args),
     importEnv: (...args: unknown[]) => importEnv(...args),
     runSchedulerNow: (...args: unknown[]) => runSchedulerNow(...args),
+    testGenerationBackend: (...args: unknown[]) => testGenerationBackend(...args),
     update: (...args: unknown[]) => updateSystemConfig(...args),
   },
 }));
@@ -721,11 +724,115 @@ describe('SettingsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
     fireEvent.click(screen.getByRole('button', { name: '维护自选股' }));
+    fireEvent.click(screen.getByRole('button', { name: '配置新闻搜索' }));
     fireEvent.click(screen.getByRole('button', { name: '配置通知' }));
 
     expect(setActiveCategory).toHaveBeenNthCalledWith(1, 'ai_model');
     expect(setActiveCategory).toHaveBeenNthCalledWith(2, 'base');
-    expect(setActiveCategory).toHaveBeenNthCalledWith(3, 'notification');
+    expect(setActiveCategory).toHaveBeenNthCalledWith(3, 'search');
+    expect(setActiveCategory).toHaveBeenNthCalledWith(4, 'notification');
+  });
+
+  it('verifies the primary model and surfaces a rejected key', async () => {
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'base' }));
+    getSetupStatus.mockResolvedValue({
+      isComplete: true,
+      readyForSmoke: true,
+      requiredMissingKeys: [],
+      nextStepKey: null,
+      checks: [
+        {
+          key: 'llm_primary',
+          title: 'LLM 主渠道',
+          category: 'ai_model',
+          required: true,
+          status: 'configured',
+          message: '已检测到 显式主模型: openai/logfare/auto',
+          nextStep: null,
+        },
+      ],
+    });
+    testGenerationBackend.mockResolvedValue({
+      success: false,
+      mode: 'text',
+      message: 'AuthenticationError: API key required',
+      status: {},
+    });
+
+    renderSettingsPage();
+
+    const verifyButton = await screen.findByRole('button', { name: '验证模型连通性' });
+    await act(async () => {
+      fireEvent.click(verifyButton);
+    });
+
+    expect(testGenerationBackend).toHaveBeenCalledWith({ mode: 'text', items: [] });
+    expect(await screen.findByText(/模型连通性失败/)).toBeInTheDocument();
+    expect(screen.getByText(/AuthenticationError: API key required/)).toBeInTheDocument();
+  });
+
+  it('reports a successful model verification', async () => {
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'base' }));
+    getSetupStatus.mockResolvedValue({
+      isComplete: true,
+      readyForSmoke: true,
+      requiredMissingKeys: [],
+      nextStepKey: null,
+      checks: [
+        {
+          key: 'llm_primary',
+          title: 'LLM 主渠道',
+          category: 'ai_model',
+          required: true,
+          status: 'configured',
+          message: '已检测到 显式主模型: openai/logfare/auto',
+          nextStep: null,
+        },
+      ],
+    });
+    testGenerationBackend.mockResolvedValue({
+      success: true,
+      mode: 'text',
+      message: 'OK',
+      status: {},
+    });
+
+    renderSettingsPage();
+
+    const verifyButton = await screen.findByRole('button', { name: '验证模型连通性' });
+    await act(async () => {
+      fireEvent.click(verifyButton);
+    });
+
+    expect(await screen.findByText(/模型连通性正常/)).toBeInTheDocument();
+  });
+
+  it('keeps the setup card on the search category so the news check sits with its fields', async () => {
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'search' }));
+    getSetupStatus.mockResolvedValue({
+      isComplete: true,
+      readyForSmoke: true,
+      requiredMissingKeys: [],
+      nextStepKey: null,
+      checks: [
+        {
+          key: 'news_search',
+          title: '新闻搜索渠道',
+          category: 'search',
+          required: false,
+          status: 'optional',
+          message: '未配置新闻搜索渠道，分析报告将不包含新闻面证据。',
+          nextStep: '需要新闻面时可配置 Tavily 或 Brave 的 API Key，或填写自建 SearXNG 实例地址。',
+        },
+      ],
+    });
+
+    renderSettingsPage();
+
+    expect(await screen.findByTestId('first-run-setup-card')).toBeInTheDocument();
+    expect(screen.getByText('新闻搜索渠道')).toBeInTheDocument();
+    expect(screen.getByText('未配置新闻搜索渠道，分析报告将不包含新闻面证据。')).toBeInTheDocument();
+    expect(screen.getByText('需要新闻面时可配置 Tavily 或 Brave 的 API Key，或填写自建 SearXNG 实例地址。')).toBeInTheDocument();
   });
 
   it('scrolls to and focuses the stock list field when the setup guide watchlist action is used', async () => {
@@ -2956,23 +3063,23 @@ describe('SettingsPage', () => {
       useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'ai_model', hasDirty: false }));
       const page = renderSettingsPage();
       fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
-      fireEvent.change(await screen.findByLabelText('渠道名称'), { target: { value: 'UNSAVED_NAME' } });
+      fireEvent.change(await screen.findByLabelText('Channel name'), { target: { value: 'UNSAVED_NAME' } });
       await waitFor(() => expect(beforeUnloadListeners.length).toBe(1));
       useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'base', hasDirty: false }));
       page.rerenderSettingsPage();
-      await waitFor(() => expect(screen.getByLabelText('渠道名称')).not.toBeVisible());
+      await waitFor(() => expect(screen.getByLabelText('Channel name')).not.toBeVisible());
       expect(beforeUnloadListeners.length).toBe(1);
       act(() => { void page.router.navigate('/chat'); });
       fireEvent.click(await screen.findByRole('button', { name: '取消' }));
       expect(page.router.state.location.pathname).toBe('/settings');
       useSystemConfigMock.mockReturnValue(buildSystemConfigState({ activeCategory: 'ai_model', hasDirty: false }));
       page.rerenderSettingsPage();
-      expect(await screen.findByLabelText('渠道名称')).toHaveValue('unsaved_name');
-      expect(screen.getByLabelText('渠道名称')).toBeVisible();
+      expect(await screen.findByLabelText('Channel name')).toHaveValue('unsaved_name');
+      expect(screen.getByLabelText('Channel name')).toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: '重置' }));
       await waitFor(() => expect(beforeUnloadListeners.length).toBe(0));
       fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
-      expect(await screen.findByLabelText('渠道名称')).toHaveValue('primary');
+      expect(await screen.findByLabelText('Channel name')).toHaveValue('primary');
     });
 
     it('waits for a hidden real LLM save and refresh before allowing reset, import, or departure', async () => {
@@ -2987,7 +3094,7 @@ describe('SettingsPage', () => {
 
       fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
       fireEvent.change(await screen.findByLabelText('Base URL'), { target: { value: 'https://draft.example.com/v1' } });
-      fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save AI configuration' }));
       await waitFor(() => expect(updateSystemConfig).toHaveBeenCalledTimes(1));
       expect(screen.getByRole('button', { name: '重置' })).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: '重置' }));
@@ -3018,7 +3125,7 @@ describe('SettingsPage', () => {
         itemsByCategory: { ...configState.itemsByCategory, ai_model: savedItems },
       });
       page.rerenderSettingsPage();
-      await waitFor(() => expect(screen.getByText('当前没有未保存的改动')).not.toBeVisible());
+      await waitFor(() => expect(screen.getByText('No unsaved changes')).not.toBeVisible());
       expect(screen.getByRole('button', { name: '重置' })).toBeDisabled();
       expect(screen.getByRole('button', { name: '导入 .env' })).toBeDisabled();
       expect(beforeUnloadListeners).toHaveLength(1);
@@ -3030,7 +3137,7 @@ describe('SettingsPage', () => {
       expect(screen.getByRole('button', { name: '重置' })).toBeEnabled();
       expect(screen.getByRole('button', { name: '导入 .env' })).toBeEnabled();
       expect(beforeUnloadListeners).toHaveLength(0);
-      expect(screen.queryByText('当前没有未保存的改动')).not.toBeInTheDocument();
+      expect(screen.queryByText('No unsaved changes')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: '确定' }));
       await waitFor(() => expect(page.router.state.location.pathname).toBe('/chat'));
       expect(updateSystemConfig).toHaveBeenCalledTimes(1);
@@ -3042,13 +3149,13 @@ describe('SettingsPage', () => {
       useSystemConfigMock.mockReturnValue(configState);
       const page = renderSettingsPage();
       fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
-      fireEvent.change(await screen.findByLabelText('渠道名称'), { target: { value: '' } });
+      fireEvent.change(await screen.findByLabelText('Channel name'), { target: { value: '' } });
       await waitFor(() => expect(beforeUnloadListeners).toHaveLength(1));
       expect(screen.getByTestId('generation-backend-status-items')).toBeEmptyDOMElement();
 
       useSystemConfigMock.mockReturnValue({ ...configState, activeCategory: 'system' });
       page.rerenderSettingsPage();
-      expect(screen.getByLabelText('渠道名称')).not.toBeVisible();
+      expect(screen.getByLabelText('Channel name')).not.toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: '导入 .env' }));
       expect(await screen.findByText('导入会覆盖当前草稿')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: '取消' }));
@@ -3058,8 +3165,8 @@ describe('SettingsPage', () => {
 
       useSystemConfigMock.mockReturnValue(configState);
       page.rerenderSettingsPage();
-      expect(screen.getByLabelText('渠道名称')).toBeVisible();
-      expect(screen.getByLabelText('渠道名称')).toHaveValue('');
+      expect(screen.getByLabelText('Channel name')).toBeVisible();
+      expect(screen.getByLabelText('Channel name')).toHaveValue('');
     });
 
     it.each(['reloaded', 'reload-failed', 'import-failed'] as const)(
@@ -3083,7 +3190,7 @@ describe('SettingsPage', () => {
         useSystemConfigMock.mockReturnValue(configState);
         const page = renderSettingsPage();
         fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
-        fireEvent.change(await screen.findByLabelText('渠道名称'), { target: { value: '' } });
+        fireEvent.change(await screen.findByLabelText('Channel name'), { target: { value: '' } });
         useSystemConfigMock.mockReturnValue({ ...configState, activeCategory: 'system' });
         page.rerenderSettingsPage();
         await waitFor(() => expect(screen.getByTestId('scheduler-enabled-checkbox')).toBeChecked());
@@ -3099,7 +3206,7 @@ describe('SettingsPage', () => {
         });
         await waitFor(() => expect(importEnv).toHaveBeenCalledTimes(1));
         expect(resetDraft).not.toHaveBeenCalled();
-        expect(screen.getByLabelText('渠道名称')).toHaveValue('');
+        expect(screen.getByLabelText('Channel name')).toHaveValue('');
         expect(screen.getByRole('button', { name: '重置' })).toBeDisabled();
 
         if (outcome === 'import-failed') {
@@ -3120,10 +3227,10 @@ describe('SettingsPage', () => {
         }
         useSystemConfigMock.mockReturnValue(configState);
         page.rerenderSettingsPage();
-        if (!screen.queryByLabelText('渠道名称')) {
+        if (!screen.queryByLabelText('Channel name')) {
           fireEvent.click(await screen.findByRole('button', { name: /primary/i }));
         }
-        expect(await screen.findByLabelText('渠道名称')).toHaveValue(outcome === 'import-failed' ? '' : 'primary');
+        expect(await screen.findByLabelText('Channel name')).toHaveValue(outcome === 'import-failed' ? '' : 'primary');
         if (outcome !== 'import-failed') {
           act(() => { void page.router.navigate('/chat'); });
           await waitFor(() => expect(page.router.state.location.pathname).toBe('/chat'));

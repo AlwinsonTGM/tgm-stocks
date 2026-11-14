@@ -7,7 +7,11 @@ import type {
   PortfolioPositionItem,
   PortfolioSide,
 } from '../types/portfolio';
+import type { UiLanguage } from '../i18n/uiText';
 import { toDateInputValue } from './format';
+import { getCurrentUiLanguage } from './uiLanguage';
+
+const pick = (language: UiLanguage, zh: string, en: string): string => (language === 'en' ? en : zh);
 
 export type FxRefreshFeedback = {
   tone: 'neutral' | 'success' | 'warning';
@@ -53,70 +57,119 @@ export function formatPositionMoney(value: number, row: PortfolioPositionItem): 
   return formatMoney(value, row.valuationCurrency);
 }
 
-export function getPositionPriceLabel(row: PortfolioPositionItem): string {
-  if (!hasPositionPrice(row)) return '缺价';
+export function getPositionPriceLabel(
+  row: PortfolioPositionItem,
+  language: UiLanguage = getCurrentUiLanguage(),
+): string {
+  if (!hasPositionPrice(row)) return pick(language, '缺价', 'No price');
   if (row.priceSource === 'realtime_quote') {
-    return row.priceProvider ? `实时价 · ${row.priceProvider}` : '实时价';
+    const label = pick(language, '实时价', 'Live price');
+    return row.priceProvider ? `${label} · ${row.priceProvider}` : label;
   }
   if (row.priceSource === 'history_close') {
-    return row.priceStale && row.priceDate ? `收盘价 · ${row.priceDate}` : '收盘价';
+    const label = pick(language, '收盘价', 'Close price');
+    return row.priceStale && row.priceDate ? `${label} · ${row.priceDate}` : label;
   }
-  return row.priceSource || '未知来源';
+  return row.priceSource || pick(language, '未知来源', 'Unknown source');
 }
 
-export function formatSideLabel(value: PortfolioSide): string {
-  return value === 'buy' ? '买入' : '卖出';
+export function formatSideLabel(value: PortfolioSide, language: UiLanguage = getCurrentUiLanguage()): string {
+  return value === 'buy' ? pick(language, '买入', 'Buy') : pick(language, '卖出', 'Sell');
 }
 
-export function formatCashDirectionLabel(value: PortfolioCashDirection): string {
-  return value === 'in' ? '流入' : '流出';
+export function formatCashDirectionLabel(
+  value: PortfolioCashDirection,
+  language: UiLanguage = getCurrentUiLanguage(),
+): string {
+  return value === 'in' ? pick(language, '流入', 'Inflow') : pick(language, '流出', 'Outflow');
 }
 
-export function formatCorporateActionLabel(value: PortfolioCorporateActionType): string {
-  return value === 'cash_dividend' ? '现金分红' : '拆并股调整';
+export function formatCorporateActionLabel(
+  value: PortfolioCorporateActionType,
+  language: UiLanguage = getCurrentUiLanguage(),
+): string {
+  return value === 'cash_dividend'
+    ? pick(language, '现金分红', 'Cash dividend')
+    : pick(language, '拆并股调整', 'Split / merger adjustment');
 }
 
-export function formatBrokerLabel(value: string, displayName?: string): string {
-  if (displayName && displayName.trim()) return `${value}（${displayName.trim()}）`;
-  if (value === 'huatai') return 'huatai（华泰）';
-  if (value === 'citic') return 'citic（中信）';
-  if (value === 'cmb') return 'cmb（招商）';
+const BROKER_DISPLAY_NAMES: Record<string, string> = {
+  华泰: 'Huatai',
+  中信: 'CITIC',
+  招商: 'CMB',
+  国泰君安: 'Guotai Junan',
+  广发: 'GF Securities',
+  海通: 'Haitong',
+  银河: 'Galaxy',
+  东方财富: 'East Money',
+};
+
+export function formatBrokerLabel(
+  value: string,
+  displayName?: string,
+  language: UiLanguage = getCurrentUiLanguage(),
+): string {
+  const open = language === 'en' ? ' (' : '（';
+  const close = language === 'en' ? ')' : '）';
+  const trimmed = displayName?.trim();
+  if (trimmed) {
+    const localized = language === 'en' ? BROKER_DISPLAY_NAMES[trimmed] ?? trimmed : trimmed;
+    return `${value}${open}${localized}${close}`;
+  }
+  if (value === 'huatai') return `huatai${open}${pick(language, '华泰', 'Huatai')}${close}`;
+  if (value === 'citic') return `citic${open}${pick(language, '中信', 'CITIC')}${close}`;
+  if (value === 'cmb') return `cmb${open}${pick(language, '招商', 'CMB')}${close}`;
   return value;
 }
 
-export function buildFxRefreshFeedback(data: PortfolioFxRefreshResponse): FxRefreshFeedback {
+export function buildFxRefreshFeedback(
+  data: PortfolioFxRefreshResponse,
+  language: UiLanguage = getCurrentUiLanguage(),
+): FxRefreshFeedback {
   if (data.refreshEnabled === false) {
     return {
       tone: 'neutral',
-      text: '汇率在线刷新已被禁用。',
+      text: pick(language, '汇率在线刷新已被禁用。', 'Online FX refresh is disabled.'),
     };
   }
 
   if (data.pairCount === 0) {
     return {
       tone: 'neutral',
-      text: '当前范围无可刷新的汇率对。',
+      text: pick(language, '当前范围无可刷新的汇率对。', 'No FX pairs to refresh in this range.'),
     };
   }
 
   if (data.updatedCount > 0 && data.staleCount === 0 && data.errorCount === 0) {
     return {
       tone: 'success',
-      text: `汇率已刷新，共更新 ${data.updatedCount} 对。`,
+      text: pick(
+        language,
+        `汇率已刷新，共更新 ${data.updatedCount} 对。`,
+        `FX rates refreshed, ${data.updatedCount} pairs updated.`,
+      ),
     };
   }
 
-  const summary = `更新 ${data.updatedCount} 对，仍过期 ${data.staleCount} 对，失败 ${data.errorCount} 对。`;
+  const summary = pick(
+    language,
+    `更新 ${data.updatedCount} 对，仍过期 ${data.staleCount} 对，失败 ${data.errorCount} 对。`,
+    `${data.updatedCount} updated, ${data.staleCount} still stale, ${data.errorCount} failed.`,
+  );
   if (data.staleCount > 0) {
     return {
       tone: 'warning',
-      text: `已尝试刷新，但仍有部分货币对使用 stale/fallback 汇率。${summary}`,
+      text: pick(
+        language,
+        `已尝试刷新，但仍有部分货币对使用 stale/fallback 汇率。${summary}`,
+        `Refresh attempted, but some pairs still use stale or fallback rates. ${summary}`,
+      ),
     };
   }
 
   return {
     tone: 'warning',
-    text: `在线刷新未完全成功。${summary}`,
+    text: pick(language, '在线刷新未完全成功。', 'Online refresh did not fully succeed. ') + summary,
   };
 }
 

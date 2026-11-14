@@ -1,11 +1,13 @@
 import type { Message } from '../stores/agentChatStore';
+import { getCurrentUiLanguage } from './uiLanguage';
 
 /**
  * Format chat messages as Markdown for export.
  */
 export function formatSessionAsMarkdown(messages: Message[]): string {
+  const en = getCurrentUiLanguage() === 'en';
   const now = new Date();
-  const timeStr = now.toLocaleString('zh-CN', {
+  const timeStr = now.toLocaleString(en ? 'en-US' : 'zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -14,14 +16,14 @@ export function formatSessionAsMarkdown(messages: Message[]): string {
   });
 
   const lines: string[] = [
-    '# 问股会话',
+    en ? '# Ask session' : '# 问股会话',
     '',
-    `生成时间: ${timeStr}`,
+    en ? `Generated: ${timeStr}` : `生成时间: ${timeStr}`,
     '',
   ];
 
   for (const msg of messages) {
-    const heading = msg.role === 'user' ? '## 用户' : '## AI';
+    const heading = msg.role === 'user' ? (en ? '## User' : '## 用户') : '## AI';
     if (msg.role === 'assistant' && msg.skillName) {
       lines.push(`${heading} (${msg.skillName})`);
     } else {
@@ -46,7 +48,9 @@ export function downloadSession(messages: Message[]): void {
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
   const pad = (n: number) => n.toString().padStart(2, '0');
   const timeStr = pad(now.getHours()) + pad(now.getMinutes());
-  const filename = `问股会话_${dateStr}_${timeStr}.md`;
+  const filename = getCurrentUiLanguage() === 'en'
+    ? `ask-session_${dateStr}_${timeStr}.md`
+    : `问股会话_${dateStr}_${timeStr}.md`;
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -39,6 +39,10 @@ logger = logging.getLogger(__name__)
 # Omitted means standalone fetching; explicit None means already attempted.
 _REALTIME_QUOTE_UNSET = object()
 
+# Chip distribution is an A-share-only dataset; every provider that implements
+# it (tushare, akshare, eastmoney) resolves mainland exchange codes only.
+_CHIP_SUPPORTED_EXCHANGES = frozenset({"SH", "SZ", "BJ"})
+
 
 # === 标准化列名定义 ===
 STANDARD_COLUMNS = ['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
@@ -2972,6 +2976,13 @@ class DataFetcherManager:
         """
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
+
+        # Chip distribution is only published by A-share data sources. Skip the
+        # whole provider chain for other markets instead of logging a failure
+        # for every fetcher on every run.
+        if parse_analysis_target(stock_code).exchange not in _CHIP_SUPPORTED_EXCHANGES:
+            logger.debug(f"[筹码分布] {stock_code} 非 A 股标的，跳过筹码分布")
+            return None
 
         from .realtime_types import get_chip_circuit_breaker
         from src.config import get_config

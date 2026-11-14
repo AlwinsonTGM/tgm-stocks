@@ -17,6 +17,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from src.services.diagnostic_text import (
+    data_type_label,
+    diagnostic_text,
+    normalize_diagnostic_language,
+)
+
 logger = logging.getLogger(__name__)
 
 _CURRENT_CONTEXT: ContextVar[Optional["RunDiagnosticContext"]] = ContextVar(
@@ -323,6 +329,7 @@ class RunDiagnosticContext:
     stock_code: Optional[str] = None
     trigger_source: Optional[str] = None
     scope: Optional[str] = None
+    report_language: str = "zh"
     provider_runs: List[ProviderRun] = field(default_factory=list)
     llm_runs: List[LLMRun] = field(default_factory=list)
     notification_runs: List[NotificationRun] = field(default_factory=list)
@@ -499,6 +506,7 @@ def activate_run_diagnostic_context(
     stock_code: Optional[str] = None,
     trigger_source: Optional[str] = None,
     scope: Optional[str] = None,
+    report_language: Optional[str] = None,
     event_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Token:
     """Activate a diagnostic context and return its reset token."""
@@ -509,6 +517,7 @@ def activate_run_diagnostic_context(
         stock_code=stock_code,
         trigger_source=trigger_source,
         scope=scope,
+        report_language=normalize_diagnostic_language(report_language),
         event_sink=event_sink,
     )
     return _CURRENT_CONTEXT.set(context)
@@ -532,20 +541,6 @@ def current_diagnostic_snapshot() -> Optional[Dict[str, Any]]:
     except Exception as exc:  # pragma: no cover - defensive fail-open guard
         logger.warning("run diagnostic snapshot failed: %s", exc)
         return None
-
-
-_DATA_TYPE_LABELS = {
-    "realtime_quote": "实时行情",
-    "daily_data": "日线K线",
-    "daily_bars": "日线K线",
-    "technical": "技术指标",
-    "news": "新闻舆情",
-    "news_search": "新闻舆情",
-    "fundamental": "基本面",
-    "fundamentals": "基本面",
-    "belong_boards": "所属板块",
-    "chip": "筹码结构",
-}
 
 
 def _safe_event_key(value: Any) -> str:
@@ -609,16 +604,22 @@ def _provider_started_flow_event(
 ) -> Dict[str, Any]:
     data_type_key = _safe_event_key(data_type) or "provider"
     provider_key = _safe_event_key(provider) or "unknown"
-    label = _DATA_TYPE_LABELS.get(data_type_key, data_type_key)
+    language = context.report_language
+    label = data_type_label(data_type_key, language)
     node_id = f"provider_{data_type_key}_{provider_key}_{index}"
     timestamp = datetime.now().isoformat()
-    message = f"{label} {provider} 调用中"
+    message = diagnostic_text(
+        language,
+        "provider.started.message",
+        label=label,
+        provider=provider,
+    )
     return {
         "timestamp": timestamp,
         "severity": "info",
         "type": "provider_run_started",
         "node_id": node_id,
-        "title": f"{label}开始",
+        "title": diagnostic_text(language, "provider.started.title", label=label),
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -630,7 +631,12 @@ def _provider_started_flow_event(
                     "id": node_id,
                     "lane": "data_source",
                     "kind": "data_source",
-                    "label": f"{label} · {provider}",
+                    "label": diagnostic_text(
+                        language,
+                        "provider.node.label",
+                        label=label,
+                        provider=provider,
+                    ),
                     "status": "running",
                     "provider": provider,
                     "started_at": timestamp,
@@ -649,22 +655,37 @@ def _provider_flow_event(
 ) -> Dict[str, Any]:
     data_type = _safe_event_key(run.data_type) or "provider"
     provider_key = _safe_event_key(run.provider) or "unknown"
-    label = _DATA_TYPE_LABELS.get(data_type, data_type)
+    language = context.report_language
+    label = data_type_label(data_type, language)
     fallback = bool(run.fallback_from or run.fallback_to)
     status = _flow_status_for_success(run.success, fallback=fallback)
     node_id = f"provider_{data_type}_{provider_key}_{index}"
     started_at = _started_at_from_end_and_duration(run.created_at, run.latency_ms)
-    message = (
-        f"{label} {run.provider} 成功"
-        if run.success
-        else f"{label} {run.provider} 失败：{run.error_message_sanitized or run.error_type or '未知错误'}"
-    )
+    if run.success:
+        message = diagnostic_text(
+            language,
+            "provider.success.message",
+            label=label,
+            provider=run.provider,
+        )
+        title = diagnostic_text(language, "provider.success.title", label=label)
+    else:
+        message = diagnostic_text(
+            language,
+            "provider.failed.message",
+            label=label,
+            provider=run.provider,
+            error=run.error_message_sanitized
+            or run.error_type
+            or diagnostic_text(language, "error.unknown"),
+        )
+        title = diagnostic_text(language, "provider.failed.title", label=label)
     return {
         "timestamp": run.created_at,
         "severity": "success" if run.success else "warning",
         "type": "provider_run",
         "node_id": node_id,
-        "title": f"{label}{'成功' if run.success else '失败'}",
+        "title": title,
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -681,7 +702,12 @@ def _provider_flow_event(
                     "id": node_id,
                     "lane": "data_source",
                     "kind": "data_source",
-                    "label": f"{label} · {run.provider}",
+                    "label": diagnostic_text(
+                        language,
+                        "provider.node.label",
+                        label=label,
+                        provider=run.provider,
+                    ),
                     "status": status,
                     "provider": run.provider,
                     "started_at": started_at,
@@ -705,15 +731,16 @@ def _llm_started_flow_event(
 ) -> Dict[str, Any]:
     call_type_key = _safe_event_key(call_type) or "analysis"
     display_model = model or provider or "unknown"
+    language = context.report_language
     node_id = f"llm_{call_type_key}_{index}"
     timestamp = datetime.now().isoformat()
-    message = f"LLM {display_model} 调用中"
+    message = diagnostic_text(language, "llm.started.message", model=display_model)
     return {
         "timestamp": timestamp,
         "severity": "info",
         "type": "llm_run_started",
         "node_id": node_id,
-        "title": "LLM 开始",
+        "title": diagnostic_text(language, "llm.started.title"),
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -725,7 +752,7 @@ def _llm_started_flow_event(
                     "id": node_id,
                     "lane": "analysis",
                     "kind": "model",
-                    "label": "LLM 生成",
+                    "label": diagnostic_text(language, "llm.node.label"),
                     "status": "running",
                     "provider": display_model,
                     "started_at": timestamp,
@@ -744,20 +771,29 @@ def _llm_flow_event(
 ) -> Dict[str, Any]:
     call_type = _safe_event_key(run.call_type) or "analysis"
     model = run.model or run.provider or "unknown"
+    language = context.report_language
     status = _flow_status_for_success(run.success, fallback=bool(run.fallback_model or index > 1))
     node_id = f"llm_{call_type}_{index}"
     started_at = _started_at_from_end_and_duration(run.created_at, run.duration_ms)
-    message = (
-        f"LLM {model} 成功"
-        if run.success
-        else f"LLM {model} 失败：{run.error_message_sanitized or run.error_type or '未知错误'}"
-    )
+    if run.success:
+        message = diagnostic_text(language, "llm.success.message", model=model)
+        title = diagnostic_text(language, "llm.success.title")
+    else:
+        message = diagnostic_text(
+            language,
+            "llm.failed.message",
+            model=model,
+            error=run.error_message_sanitized
+            or run.error_type
+            or diagnostic_text(language, "error.unknown"),
+        )
+        title = diagnostic_text(language, "llm.failed.title")
     return {
         "timestamp": run.created_at,
         "severity": "success" if run.success else "danger",
         "type": "llm_run",
         "node_id": node_id,
-        "title": f"LLM {'成功' if run.success else '失败'}",
+        "title": title,
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -772,7 +808,7 @@ def _llm_flow_event(
                     "id": node_id,
                     "lane": "analysis",
                     "kind": "model",
-                    "label": "LLM 生成",
+                    "label": diagnostic_text(language, "llm.node.label"),
                     "status": status,
                     "provider": model,
                     "started_at": started_at,
@@ -791,14 +827,24 @@ def _history_flow_event(
     index: int,
 ) -> Dict[str, Any]:
     node_id = "history_save" if index == 1 else f"history_save_{index}"
+    language = context.report_language
     status = "success" if run.report_saved else "failed"
-    message = "报告历史已保存" if run.report_saved else f"报告历史保存失败：{run.error_message_sanitized or '未知错误'}"
+    if run.report_saved:
+        message = diagnostic_text(language, "history.saved.message")
+        title = diagnostic_text(language, "history.saved.title")
+    else:
+        message = diagnostic_text(
+            language,
+            "history.failed.message",
+            error=run.error_message_sanitized or diagnostic_text(language, "error.unknown"),
+        )
+        title = diagnostic_text(language, "history.failed.title")
     return {
         "timestamp": run.created_at,
         "severity": "success" if run.report_saved else "danger",
         "type": "history_run",
         "node_id": node_id,
-        "title": "历史保存成功" if run.report_saved else "历史保存失败",
+        "title": title,
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -809,7 +855,7 @@ def _history_flow_event(
                     "id": node_id,
                     "lane": "artifact",
                     "kind": "artifact",
-                    "label": "保存报告",
+                    "label": diagnostic_text(language, "history.node.label"),
                     "status": status,
                     "message": message,
                 },
@@ -825,18 +871,26 @@ def _notification_flow_event(
 ) -> Dict[str, Any]:
     channel = run.channel or "unknown"
     channel_key = _safe_event_key(channel) or "unknown"
+    language = context.report_language
     skipped = run.status in {"skipped", "not_configured"}
     status = _flow_status_for_success(run.success, skipped=skipped)
     node_id = f"notification_{channel_key}_{index}"
     if status == "success":
-        title = "通知发送成功"
-        message = f"{channel} 通知发送成功"
+        title = diagnostic_text(language, "notification.success.title")
+        message = diagnostic_text(language, "notification.success.message", channel=channel)
     elif status == "skipped":
-        title = "通知跳过"
-        message = f"{channel} 通知跳过"
+        title = diagnostic_text(language, "notification.skipped.title")
+        message = diagnostic_text(language, "notification.skipped.message", channel=channel)
     else:
-        title = "通知失败"
-        message = f"{channel} 通知失败：{run.error_message_sanitized or run.status or '未知错误'}"
+        title = diagnostic_text(language, "notification.failed.title")
+        message = diagnostic_text(
+            language,
+            "notification.failed.message",
+            channel=channel,
+            error=run.error_message_sanitized
+            or run.status
+            or diagnostic_text(language, "error.unknown"),
+        )
     return {
         "timestamp": run.created_at,
         "severity": "success" if status == "success" else ("warning" if status == "skipped" else "danger"),
@@ -854,7 +908,11 @@ def _notification_flow_event(
                     "id": node_id,
                     "lane": "artifact",
                     "kind": "notification",
-                    "label": f"推送通知 · {channel}",
+                    "label": diagnostic_text(
+                        language,
+                        "notification.node.label",
+                        channel=channel,
+                    ),
                     "status": status,
                     "provider": channel,
                     "attempts": run.attempts,
@@ -1039,21 +1097,21 @@ def record_history_run(
         logger.warning("history diagnostic record failed: %s", exc)
 
 
-_SUMMARY_STATUS_LABELS = {
-    "normal": "正常",
-    "degraded": "部分降级",
-    "failed": "失败",
-    "unknown": "未知",
-}
-_ANALYSIS_INPUT_STATUS_MESSAGES = {
-    "missing": "未进入本次分析输入",
-    "partial": "本次分析输入仅部分可用",
-    "fallback": "本次分析输入使用降级数据",
-    "stale": "本次分析输入使用过期数据",
-    "estimated": "本次分析输入使用估算数据",
-    "fetch_failed": "输入块显示抓取失败",
-    "not_supported": "输入块标记为不支持",
-}
+_ANALYSIS_INPUT_STATUS_KEYS = frozenset(
+    {
+        "missing",
+        "partial",
+        "fallback",
+        "stale",
+        "estimated",
+        "fetch_failed",
+        "not_supported",
+    }
+)
+
+
+def _summary_status_label(status: str, language: Any = None) -> str:
+    return diagnostic_text(language, f"summary.status.{status}")
 
 
 def _as_dict(value: Any) -> Dict[str, Any]:
@@ -1108,11 +1166,13 @@ def _analysis_input_block(
     return {}
 
 
-def _analysis_input_status_message(block: Dict[str, Any]) -> Optional[str]:
+def _analysis_input_status_message(block: Dict[str, Any], language: Any = None) -> Optional[str]:
     status = str(block.get("status") or "").strip()
     if status == "available" or not status:
         return None
-    return _ANALYSIS_INPUT_STATUS_MESSAGES.get(status, f"输入块状态为 {status}")
+    if status in _ANALYSIS_INPUT_STATUS_KEYS:
+        return diagnostic_text(language, f"input.{status}")
+    return diagnostic_text(language, "input.other", status=status)
 
 
 def _list_text(value: Any, *, limit: int = 5) -> List[str]:
@@ -1129,9 +1189,10 @@ def _list_text(value: Any, *, limit: int = 5) -> List[str]:
 def _reconcile_daily_provider_with_analysis_input(
     component: RunDiagnosticComponent,
     context_snapshot: Dict[str, Any],
+    language: Any = None,
 ) -> RunDiagnosticComponent:
     input_block = _analysis_input_block(context_snapshot, "daily_bars")
-    input_message = _analysis_input_status_message(input_block)
+    input_message = _analysis_input_status_message(input_block, language)
     if not input_message or component.status not in {"ok", "degraded"}:
         return component
 
@@ -1153,7 +1214,13 @@ def _reconcile_daily_provider_with_analysis_input(
         component.key,
         component.label,
         "degraded",
-        f"{component.label}{provider} 成功，但{input_message}",
+        diagnostic_text(
+            language,
+            "component.provider.degraded_input",
+            label=component.label,
+            provider=provider,
+            input_message=input_message,
+        ),
         details,
     )
 
@@ -1164,13 +1231,19 @@ def _provider_component(
     label: str,
     data_type: str,
     provider_runs: List[Dict[str, Any]],
+    language: Any = None,
 ) -> RunDiagnosticComponent:
     runs = [
         run for run in provider_runs
         if isinstance(run, dict) and run.get("data_type") == data_type
     ]
     if not runs:
-        return _component(key, label, "unknown", f"{label}未记录诊断信息")
+        return _component(
+            key,
+            label,
+            "unknown",
+            diagnostic_text(language, "component.no_record", label=label),
+        )
 
     successes = [run for run in runs if run.get("success") is True]
     failures = [run for run in runs if run.get("success") is False]
@@ -1194,27 +1267,42 @@ def _provider_component(
                 key,
                 label,
                 "degraded",
-                f"{label}{provider} 成功，前置数据源失败后已继续",
+                diagnostic_text(
+                    language,
+                    "component.provider.degraded",
+                    label=label,
+                    provider=provider,
+                ),
                 details,
             )
         return _component(
             key,
             label,
             "ok",
-            f"{label}{provider} 成功",
+            diagnostic_text(
+                language,
+                "component.provider.ok",
+                label=label,
+                provider=provider,
+            ),
             details,
         )
 
     message = (
         last_run.get("error_message_sanitized")
         or last_run.get("error_type")
-        or "所有数据源尝试失败"
+        or diagnostic_text(language, "component.provider.all_failed")
     )
     return _component(
         key,
         label,
         "failed",
-        f"{label}失败：{message}",
+        diagnostic_text(
+            language,
+            "component.provider.failed",
+            label=label,
+            error=message,
+        ),
         {
             "attempts": len(runs),
             "provider": last_run.get("provider"),
@@ -1223,10 +1311,14 @@ def _provider_component(
     )
 
 
-def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]) -> RunDiagnosticComponent:
-    label = "新闻搜索"
+def _news_component(
+    context_snapshot: Dict[str, Any],
+    raw_result: Dict[str, Any],
+    language: Any = None,
+) -> RunDiagnosticComponent:
+    label = diagnostic_text(language, "component.news")
     input_block = _analysis_input_block(context_snapshot, "news")
-    input_message = _analysis_input_status_message(input_block)
+    input_message = _analysis_input_status_message(input_block, language)
     has_retrieval_news = "news_retrieval_content" in context_snapshot
     has_snapshot_news = has_retrieval_news or "news_content" in context_snapshot
     news_result_count = context_snapshot.get("news_result_count")
@@ -1237,7 +1329,12 @@ def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]
                     "news",
                     label,
                     "degraded",
-                    f"新闻检索返回 {news_result_count} 条结果，但新闻{input_message}；报告页相关资讯可能来自后续检索或历史持久化",
+                    diagnostic_text(
+                        language,
+                        "news.retrieval_with_input",
+                        count=news_result_count,
+                        input_message=input_message,
+                    ),
                     {
                         "record_count": news_result_count,
                         "analysis_input_block": "news",
@@ -1252,16 +1349,22 @@ def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]
                 "news",
                 label,
                 "ok",
-                f"新闻检索返回 {news_result_count} 条结果",
+                diagnostic_text(language, "news.retrieval_ok", count=news_result_count),
                 {"record_count": news_result_count},
             )
-        return _component("news", label, "degraded", "新闻搜索无结果", {"record_count": 0})
+        return _component(
+            "news",
+            label,
+            "degraded",
+            diagnostic_text(language, "news.no_results"),
+            {"record_count": 0},
+        )
     if input_message:
         return _component(
             "news",
             label,
             "unknown",
-            f"新闻{input_message}；报告页相关资讯可能来自后续检索或历史持久化",
+            diagnostic_text(language, "news.input_only", input_message=input_message),
             {
                 "analysis_input_block": "news",
                 "analysis_input_status": input_block.get("status"),
@@ -1272,12 +1375,26 @@ def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]
             },
         )
     if has_snapshot_news and not has_retrieval_news:
-        return _component("news", label, "unknown", "新闻检索未记录原始证据，可能未尝试或未启用")
-    return _component("news", label, "unknown", "新闻搜索未记录诊断信息")
+        return _component(
+            "news",
+            label,
+            "unknown",
+            diagnostic_text(language, "news.no_raw_evidence"),
+        )
+    return _component(
+        "news",
+        label,
+        "unknown",
+        diagnostic_text(language, "news.no_record"),
+    )
 
 
-def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> RunDiagnosticComponent:
-    label = "LLM"
+def _llm_component(
+    diagnostics: Dict[str, Any],
+    raw_result: Dict[str, Any],
+    language: Any = None,
+) -> RunDiagnosticComponent:
+    label = diagnostic_text(language, "component.llm")
     runs = [
         run for run in _as_list(diagnostics.get("llm_runs"))
         if isinstance(run, dict)
@@ -1290,9 +1407,9 @@ def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> R
             success_run = successes[-1]
             model = success_run.get("model") or raw_result.get("model_used") or "unknown"
             status = "degraded" if failures or success_run.get("fallback_model") else "ok"
-            message = f"LLM {model} 成功"
+            message = diagnostic_text(language, "llm.component.ok", model=model)
             if status == "degraded":
-                message = f"LLM {model} 成功，期间发生过失败或模型切换"
+                message = diagnostic_text(language, "llm.component.degraded", model=model)
             return _component(
                 "llm",
                 label,
@@ -1309,7 +1426,13 @@ def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> R
             "llm",
             label,
             "failed",
-            f"LLM 失败：{last_run.get('error_message_sanitized') or last_run.get('error_type') or '未知错误'}",
+            diagnostic_text(
+                language,
+                "llm.component.failed",
+                error=last_run.get("error_message_sanitized")
+                or last_run.get("error_type")
+                or diagnostic_text(language, "error.unknown"),
+            ),
             {"model": last_run.get("model"), "error_type": last_run.get("error_type")},
         )
 
@@ -1319,24 +1442,53 @@ def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> R
                 "llm",
                 label,
                 "failed",
-                f"LLM 失败：{sanitize_diagnostic_text(raw_result.get('error_message')) or '未知错误'}",
+                diagnostic_text(
+                    language,
+                    "llm.component.failed",
+                    error=sanitize_diagnostic_text(raw_result.get("error_message"))
+                    or diagnostic_text(language, "error.unknown"),
+                ),
             )
         model = raw_result.get("model_used")
         if model:
-            return _component("llm", label, "ok", f"LLM {model} 成功", {"model": model})
+            return _component(
+                "llm",
+                label,
+                "ok",
+                diagnostic_text(language, "llm.component.ok", model=model),
+                {"model": model},
+            )
         if raw_result.get("analysis_summary"):
-            return _component("llm", label, "ok", "LLM 成功，模型未记录")
-    return _component("llm", label, "unknown", "LLM 未记录诊断信息")
+            return _component(
+                "llm",
+                label,
+                "ok",
+                diagnostic_text(language, "llm.component.ok_no_model"),
+            )
+    return _component(
+        "llm",
+        label,
+        "unknown",
+        diagnostic_text(language, "llm.component.no_record"),
+    )
 
 
-def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticComponent:
-    label = "通知"
+def _notification_component(
+    diagnostics: Dict[str, Any],
+    language: Any = None,
+) -> RunDiagnosticComponent:
+    label = diagnostic_text(language, "component.notification")
     runs = [
         run for run in _as_list(diagnostics.get("notification_runs"))
         if isinstance(run, dict)
     ]
     if not runs:
-        return _component("notification", label, "unknown", "通知结果未记录")
+        return _component(
+            "notification",
+            label,
+            "unknown",
+            diagnostic_text(language, "notification.component.no_record"),
+        )
 
     skipped = [run for run in runs if run.get("status") in {"skipped", "not_configured"}]
     successes = [run for run in runs if run.get("success") is True]
@@ -1347,7 +1499,7 @@ def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticCompone
             "notification",
             label,
             "degraded",
-            "部分通知渠道失败，其余渠道已发送",
+            diagnostic_text(language, "notification.component.partial"),
             {"channels": channels, "failed": [run.get("channel") for run in failures]},
         )
     if successes:
@@ -1355,7 +1507,7 @@ def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticCompone
             "notification",
             label,
             "ok",
-            "通知发送成功",
+            diagnostic_text(language, "notification.component.ok"),
             {"channels": channels},
         )
     if skipped and not failures:
@@ -1364,7 +1516,7 @@ def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticCompone
             "notification",
             label,
             status,
-            "通知未配置或本次跳过",
+            diagnostic_text(language, "notification.component.skipped"),
             {"channels": channels},
         )
     last_failure = failures[-1] if failures else runs[-1]
@@ -1372,7 +1524,13 @@ def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticCompone
         "notification",
         label,
         "failed",
-        f"通知失败：{last_failure.get('error_message_sanitized') or last_failure.get('status') or '未知错误'}",
+        diagnostic_text(
+            language,
+            "notification.component.failed",
+            error=last_failure.get("error_message_sanitized")
+            or last_failure.get("status")
+            or diagnostic_text(language, "error.unknown"),
+        ),
         {"channels": channels},
     )
 
@@ -1380,8 +1538,9 @@ def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticCompone
 def _history_component(
     diagnostics: Dict[str, Any],
     report_saved: Optional[bool],
+    language: Any = None,
 ) -> RunDiagnosticComponent:
-    label = "历史保存"
+    label = diagnostic_text(language, "component.history")
     runs = [
         run for run in _as_list(diagnostics.get("history_runs"))
         if isinstance(run, dict)
@@ -1393,20 +1552,40 @@ def _history_component(
                 "history",
                 label,
                 "ok",
-                "报告历史已保存",
+                diagnostic_text(language, "history.component.ok"),
                 {"analysis_history_id": last_run.get("analysis_history_id")},
             )
         return _component(
             "history",
             label,
             "failed",
-            f"报告历史保存失败：{last_run.get('error_message_sanitized') or '未知错误'}",
+            diagnostic_text(
+                language,
+                "history.component.failed",
+                error=last_run.get("error_message_sanitized")
+                or diagnostic_text(language, "error.unknown"),
+            ),
         )
     if report_saved is True:
-        return _component("history", label, "ok", "报告历史已保存")
+        return _component(
+            "history",
+            label,
+            "ok",
+            diagnostic_text(language, "history.component.ok"),
+        )
     if report_saved is False:
-        return _component("history", label, "failed", "报告历史保存失败")
-    return _component("history", label, "unknown", "历史保存未记录诊断信息")
+        return _component(
+            "history",
+            label,
+            "failed",
+            diagnostic_text(language, "history.component.failed_plain"),
+        )
+    return _component(
+        "history",
+        label,
+        "unknown",
+        diagnostic_text(language, "history.component.no_record"),
+    )
 
 
 def build_run_diagnostic_summary(
@@ -1416,11 +1595,18 @@ def build_run_diagnostic_summary(
     report_saved: Optional[bool] = None,
     query_id: Optional[str] = None,
     stock_code: Optional[str] = None,
+    report_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build a user-facing diagnostic summary from persisted or in-memory evidence."""
     snapshot = _as_dict(context_snapshot)
     raw = _as_dict(raw_result)
     diagnostics = _as_dict(snapshot.get("diagnostics"))
+    language = normalize_diagnostic_language(
+        report_language
+        or raw.get("report_language")
+        or snapshot.get("report_language")
+        or diagnostics.get("report_language")
+    )
     provider_runs = [
         run for run in _as_list(diagnostics.get("provider_runs"))
         if isinstance(run, dict)
@@ -1432,25 +1618,28 @@ def build_run_diagnostic_summary(
 
     daily_data_component = _provider_component(
         key="daily_data",
-        label="日线数据",
+        label=diagnostic_text(language, "component.daily_data"),
         data_type="daily_data",
         provider_runs=provider_runs,
+        language=language,
     )
     components = {
         "realtime_quote": _provider_component(
             key="realtime_quote",
-            label="实时行情",
+            label=diagnostic_text(language, "component.realtime_quote"),
             data_type="realtime_quote",
             provider_runs=provider_runs,
+            language=language,
         ),
         "daily_data": _reconcile_daily_provider_with_analysis_input(
             daily_data_component,
             snapshot,
+            language,
         ),
-        "news": _news_component(snapshot, raw),
-        "llm": _llm_component(diagnostics, raw),
-        "notification": _notification_component(diagnostics),
-        "history": _history_component(diagnostics, report_saved),
+        "news": _news_component(snapshot, raw, language),
+        "llm": _llm_component(diagnostics, raw, language),
+        "notification": _notification_component(diagnostics, language),
+        "history": _history_component(diagnostics, report_saved, language),
     }
 
     has_evidence = bool(snapshot or raw or diagnostics or report_saved is not None)
@@ -1469,7 +1658,7 @@ def build_run_diagnostic_summary(
         status = "normal"
 
     if status == "unknown":
-        reason = "旧报告或诊断证据不足，无法判断本次运行状态"
+        reason = diagnostic_text(language, "summary.reason.unknown")
     else:
         reason = next(
             (
@@ -1483,7 +1672,7 @@ def build_run_diagnostic_summary(
                     for component in components.values()
                     if component.status == "degraded"
                 ),
-                _SUMMARY_STATUS_LABELS[status],
+                _summary_status_label(status, language),
             ),
         )
 
@@ -1504,7 +1693,7 @@ def build_run_diagnostic_summary(
         stock_code=resolved_stock_code,
         trigger_source=diagnostics.get("trigger_source") or snapshot.get("trigger_source"),
         status=status,
-        status_label=_SUMMARY_STATUS_LABELS[status],
+        status_label=_summary_status_label(status, language),
         reason=reason,
         components=components,
     ).to_dict()

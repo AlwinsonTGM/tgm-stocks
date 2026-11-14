@@ -1401,6 +1401,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                         report_saved=True,
                         query_id=task_id,
                         stock_code=display_stock_code,
+                        report_language=report_language,
                     ),
                     created_at=record.created_at.isoformat() if record.created_at else datetime.now().isoformat()
                 ),

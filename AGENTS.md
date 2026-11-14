@@ -289,3 +289,17 @@ CI 通过只能说明自动检查通过，不能替代人工语义收敛，也�
 - 自动 tag 默认不触发，只有 commit title 包含 `#patch`、`#minor`、`#major` 才会触发版本号更新。
 - 手动打 tag 必须使用 annotated tag。
 - 用户可见变更优先通过 PR 合入，并补齐 label 与验证说明。
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Local issues use the standard five triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context glossary and ADR layout. See `docs/agents/domain.md`.

@@ -41,12 +41,17 @@ from src.analyzer import (
 from src.notification import NotificationService, NotificationChannel
 from src.schemas.decision_action import normalize_decision_action
 from src.report_language import (
+    get_no_data_text,
     get_placeholder_text,
     get_unknown_text,
     infer_decision_type_from_advice,
+    localize_board_type,
     localize_confidence_level,
+    localize_ma_status,
     localize_operation_advice,
+    localize_trend_analysis_payload,
     localize_trend_prediction,
+    localize_volume_ratio_desc,
     normalize_report_language,
 )
 from src.search_service import SearchService
@@ -1053,7 +1058,7 @@ class StockAnalysisPipeline:
                 'price': getattr(realtime_quote, 'price', None),
                 'change_pct': getattr(realtime_quote, 'change_pct', None),
                 'volume_ratio': volume_ratio,
-                'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else '无数据',
+                'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else get_no_data_text(enhanced["report_language"]),
                 'turnover_rate': getattr(realtime_quote, 'turnover_rate', None),
                 'pe_ratio': getattr(realtime_quote, 'pe_ratio', None),
                 'pb_ratio': getattr(realtime_quote, 'pb_ratio', None),
@@ -1213,7 +1218,47 @@ class StockAnalysisPipeline:
             )
         )
 
+        # The trend analyzer and board providers author their labels in Chinese.
+        # Localize them here so the persisted context snapshot matches the report
+        # language instead of leaking Chinese into an English or Korean report.
+        report_language = enhanced.get("report_language") or "zh"
+        if normalize_report_language(report_language) != "zh":
+            realtime_block = enhanced.get("realtime")
+            if isinstance(realtime_block, dict) and "volume_ratio_desc" in realtime_block:
+                realtime_block["volume_ratio_desc"] = localize_volume_ratio_desc(
+                    realtime_block["volume_ratio_desc"], report_language
+                )
+            if "trend_analysis" in enhanced:
+                enhanced["trend_analysis"] = localize_trend_analysis_payload(
+                    enhanced["trend_analysis"], report_language
+                )
+            if "ma_status" in enhanced:
+                enhanced["ma_status"] = localize_ma_status(
+                    enhanced["ma_status"], report_language
+                )
+            self._localize_board_types(enhanced.get("fundamental_context"), report_language)
+
         return enhanced
+
+    @staticmethod
+    def _localize_board_types(fundamental_context: Any, language: str) -> None:
+        """Localize board classification labels in place.
+
+        Idempotent: an already-localized label has no canonical mapping and is
+        returned unchanged.
+        """
+        if not isinstance(fundamental_context, dict):
+            return
+        for board in fundamental_context.get("belong_boards") or []:
+            if isinstance(board, dict) and "type" in board:
+                board["type"] = localize_board_type(board["type"], language)
+        boards_block = fundamental_context.get("boards")
+        if isinstance(boards_block, dict):
+            data = boards_block.get("data")
+            if isinstance(data, dict):
+                for board in data.get("boards") or []:
+                    if isinstance(board, dict) and "type" in board:
+                        board["type"] = localize_board_type(board["type"], language)
 
     def _attach_belong_boards_to_fundamental_context(
         self,
@@ -3342,6 +3387,7 @@ class StockAnalysisPipeline:
                 query_id=effective_query_id,
                 stock_code=code,
                 trigger_source=getattr(self, "query_source", None),
+                report_language=getattr(getattr(self, "config", None), "report_language", None),
             )
         try:
             self._emit_progress(12, f"{code}：正在准备分析任务")

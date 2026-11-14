@@ -39,6 +39,12 @@ _CATEGORY_DEFINITIONS: List[Dict[str, Any]] = [
         "display_order": 30,
     },
     {
+        "category": "search",
+        "title": "Search",
+        "description": "News and sentiment search providers used as analysis evidence.",
+        "display_order": 35,
+    },
+    {
         "category": "notification",
         "title": "Notification",
         "description": "Bot, webhook, and push channel related settings.",
@@ -82,7 +88,6 @@ WEB_SETTINGS_HIDDEN_FROM_UI = {
     "USE_PROXY",
     "PROXY_HOST",
     "PROXY_PORT",
-    "SEARXNG_TIMEOUT_SECONDS",
     # CLI-only schedule-mode behavior (python main.py --schedule); the WebUI
     # runtime scheduler does not consult the startup dedup gate.
     "SCHEDULE_STARTUP_DEDUP",
@@ -1115,7 +1120,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "ANSPIRE_API_KEYS": {
         "title": "Anspire API Keys",
         "description": "Comma-separated Anspire Open API keys. Used by Anspire Search and, by default, the Anspire OpenAI-compatible LLM gateway.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1140,7 +1145,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "TAVILY_API_KEYS": {
         "title": "Tavily API Keys",
         "description": "Comma-separated Tavily API keys.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1166,7 +1171,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "SERPAPI_API_KEYS": {
         "title": "SerpAPI Keys",
         "description": "Comma-separated SerpAPI keys.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1180,7 +1185,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "BRAVE_API_KEYS": {
         "title": "Brave API Keys",
         "description": "Comma-separated Brave Search API keys.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1194,7 +1199,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "BOCHA_API_KEYS": {
         "title": "Bocha API Keys",
         "description": "Comma-separated Bocha Search API keys.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1208,7 +1213,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "MINIMAX_API_KEYS": {
         "title": "MiniMax API Key",
         "description": "MiniMax API key (search priority: Bocha > Tavily > Brave > SerpAPI > MiniMax > SearXNG).",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "password",
         "is_sensitive": True,
@@ -1222,7 +1227,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "SEARXNG_BASE_URLS": {
         "title": "SearXNG Base URLs",
         "description": "Comma-separated SearXNG instance URLs (self-hosted, no quota). Enable format: json in settings.yml.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "string",
         "ui_control": "text",
         "is_sensitive": False,
@@ -1253,7 +1258,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "SEARXNG_PUBLIC_INSTANCES_ENABLED": {
         "title": "SearXNG Public Instances",
         "description": "Auto-discover public SearXNG instances from searx.space when SEARXNG_BASE_URLS is empty. Default: false; set true to enable.",
-        "category": "data_source",
+        "category": "search",
         "data_type": "boolean",
         "ui_control": "switch",
         "is_sensitive": False,
@@ -4606,6 +4611,32 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         ],
         "warning_codes": ["legacy_json_only_basic_rules"],
     },
+    "SEARXNG_TIMEOUT_SECONDS": {
+        "title": "SearXNG Timeout (Seconds)",
+        "description": "Per-search timeout in seconds for self-hosted SearXNG instances (default 10, minimum 1).",
+        "category": "search",
+        "data_type": "integer",
+        "ui_control": "text",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "10",
+        "options": [],
+        "validation": {"min": 1},
+        "display_order": 54,
+        "help_key": "settings.data_source.SEARXNG_TIMEOUT_SECONDS",
+        "examples": [
+            "SEARXNG_TIMEOUT_SECONDS=10",
+            "SEARXNG_TIMEOUT_SECONDS=25",
+        ],
+        "docs": [
+            {
+                "label": "完整指南：搜索服务配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+            },
+        ],
+        "warning_codes": [],
+    },
 }
 
 _DOC_FULL_GUIDE_ENV = [
@@ -4892,6 +4923,14 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         ],
         "docs": _DOC_FULL_GUIDE_SEARCH,
         "warning_codes": ["public_instance_stability"],
+    },
+    "SEARXNG_TIMEOUT_SECONDS": {
+        "help_key": "settings.data_source.SEARXNG_TIMEOUT_SECONDS",
+        "examples": [
+            "SEARXNG_TIMEOUT_SECONDS=10",
+            "SEARXNG_TIMEOUT_SECONDS=25",
+        ],
+        "docs": _DOC_FULL_GUIDE_SEARCH,
     },
     "BIAS_THRESHOLD": {
         "help_key": "settings.data_source.BIAS_THRESHOLD",
@@ -5231,6 +5270,8 @@ def _infer_category(key: str) -> str:
         return "backtest"
     if key.startswith(("GEMINI_", "OPENAI_", "ANTHROPIC_", "LITELLM_", "AIHUBMIX_", "DEEPSEEK_", "LLM_")):
         return "ai_model"
+    if key.startswith(("TAVILY", "SERPAPI", "BRAVE", "BOCHA", "SEARXNG", "MINIMAX")):
+        return "search"
     if key.endswith("_PRIORITY") or key.startswith(
         (
             "TUSHARE",
@@ -5241,12 +5282,7 @@ def _infer_category(key: str) -> str:
             "PYTDX",
             "BAOSTOCK",
             "YFINANCE",
-            "TAVILY",
-            "SERPAPI",
-            "BRAVE",
-            "BOCHA",
             "ANSPIRE",
-            "SEARXNG",
             "NEWS_",
             "BIAS_",
         )

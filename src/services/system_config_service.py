@@ -613,6 +613,7 @@ class SystemConfigService:
             llm_check,
             agent_check,
             self._build_setup_stock_list_check(effective_map),
+            self._build_setup_news_search_check(effective_map),
             self._build_setup_notification_check(effective_map),
             self._build_setup_storage_check(effective_map),
         ]
@@ -3988,6 +3989,53 @@ class SystemConfigService:
             "optional",
             "通知为可选项，未配置也不影响首次跑通。",
             "需要推送时可稍后配置飞书、钉钉、Telegram、邮件或其他通知渠道。",
+        )
+
+    # Search providers that turn news evidence on, in the runtime priority order
+    # documented in docs/full-guide.md. Anspire is listed last because its key is
+    # usually an LLM gateway key; it only counts when the Anspire search path is on.
+    _SETUP_SEARCH_KEY_CHANNELS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+        ("Bocha", ("BOCHA_API_KEYS",)),
+        ("Tavily", ("TAVILY_API_KEYS",)),
+        ("Brave", ("BRAVE_API_KEYS",)),
+        ("SerpAPI", ("SERPAPI_API_KEYS",)),
+        ("MiniMax", ("MINIMAX_API_KEYS",)),
+    )
+    _SETUP_SEARCH_SEARXNG_CHANNELS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+        ("SearXNG", ("SEARXNG_BASE_URLS",)),
+    )
+
+    def _build_setup_news_search_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:
+        """Report whether any news search channel is configured.
+
+        Search is optional for the analysis flow itself, so this never blocks the
+        smoke run. It exists because without a channel every report silently loses
+        its news evidence; the report then carries the "no search channel" notice.
+        """
+        configured = [
+            label
+            for label, keys in (
+                self._SETUP_SEARCH_KEY_CHANNELS + self._SETUP_SEARCH_SEARXNG_CHANNELS
+            )
+            if self._has_any_config_value(effective_map, keys)
+        ]
+        if configured:
+            return self._setup_check(
+                "news_search",
+                "新闻搜索渠道",
+                "search",
+                False,
+                "configured",
+                f"已检测到新闻搜索渠道: {'、'.join(configured)}。",
+            )
+        return self._setup_check(
+            "news_search",
+            "新闻搜索渠道",
+            "search",
+            False,
+            "optional",
+            "未配置新闻搜索渠道，分析报告将不包含新闻面证据。",
+            "需要新闻面时可配置 Tavily 或 Brave 的 API Key，或填写自建 SearXNG 实例地址。",
         )
 
     def _build_setup_storage_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:

@@ -1742,6 +1742,65 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(checks["llm_primary"]["status"], "configured")
         self.assertEqual(checks["llm_agent"]["status"], "inherited")
 
+    def test_get_setup_status_reports_missing_news_search_channel(self) -> None:
+        self._rewrite_env(
+            "LITELLM_MODEL=gemini/gemini-3-flash-preview",
+            "GEMINI_API_KEY=secret-key-value",
+            "STOCK_LIST=600519",
+        )
+
+        with patch.dict(os.environ, {}, clear=True):
+            status = self.service.get_setup_status()
+
+        checks = {check["key"]: check for check in status["checks"]}
+        news_search = checks["news_search"]
+        self.assertEqual(news_search["category"], "search")
+        self.assertFalse(news_search["required"])
+        self.assertEqual(news_search["status"], "optional")
+        self.assertIn("未配置新闻搜索渠道", news_search["message"])
+        self.assertIn("Tavily", news_search["next_step"])
+        self.assertIn("SearXNG", news_search["next_step"])
+        # Search is an enhancement: its absence must not block the minimal flow.
+        self.assertTrue(status["is_complete"])
+        self.assertNotIn("news_search", status["required_missing_keys"])
+
+    def test_get_setup_status_detects_news_search_channels(self) -> None:
+        base_lines = [
+            "LITELLM_MODEL=gemini/gemini-3-flash-preview",
+            "GEMINI_API_KEY=secret-key-value",
+            "STOCK_LIST=600519",
+        ]
+        cases = {
+            "TAVILY_API_KEYS=tvly-test": "Tavily",
+            "BRAVE_API_KEYS=brave-test": "Brave",
+            "BOCHA_API_KEYS=bocha-test": "Bocha",
+            "SEARXNG_BASE_URLS=https://search.example.com": "SearXNG",
+        }
+
+        for line, label in cases.items():
+            with self.subTest(line=line):
+                self._rewrite_env(*base_lines, line)
+                with patch.dict(os.environ, {}, clear=True):
+                    status = self.service.get_setup_status()
+                news_search = next(check for check in status["checks"] if check["key"] == "news_search")
+                self.assertEqual(news_search["status"], "configured")
+                self.assertIn(label, news_search["message"])
+
+    def test_get_setup_status_lists_every_configured_news_search_channel(self) -> None:
+        self._rewrite_env(
+            "LITELLM_MODEL=gemini/gemini-3-flash-preview",
+            "GEMINI_API_KEY=secret-key-value",
+            "STOCK_LIST=600519",
+            "TAVILY_API_KEYS=tvly-test",
+            "BRAVE_API_KEYS=brave-test",
+        )
+
+        with patch.dict(os.environ, {}, clear=True):
+            status = self.service.get_setup_status()
+
+        news_search = next(check for check in status["checks"] if check["key"] == "news_search")
+        self.assertEqual(news_search["message"], "已检测到新闻搜索渠道: Tavily、Brave。")
+
     def test_get_setup_status_matches_notification_channel_requirements(self) -> None:
         base_lines = [
             "LITELLM_MODEL=gemini/gemini-3-flash-preview",

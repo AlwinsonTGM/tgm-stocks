@@ -22,7 +22,7 @@ import pandas as pd
 
 from src.agent.provider_trace import resolved_model_provider_identity
 from src.config import get_config
-from src.report_language import normalize_report_language
+from src.report_language import localize_index_name, normalize_report_language
 from src.search_service import SearchService
 from src.core.market_profile import get_profile, MarketProfile
 from src.core.market_strategy import get_market_strategy_blueprint
@@ -591,7 +591,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                 for item in data_list:
                     index = MarketIndex(
                         code=item['code'],
-                        name=item['name'],
+                        name=localize_index_name(item['name'], self._get_output_language()),
                         current=item['current'],
                         change=item['change'],
                         change_pct=item['change_pct'],

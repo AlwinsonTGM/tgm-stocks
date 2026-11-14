@@ -13,6 +13,9 @@ import type {
 } from '../types/analysis';
 import type { RunFlowSnapshot } from '../types/runFlow';
 import { serializeMarketReviewRegions } from '../utils/marketReviewRegion';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 // ============ API Interfaces ============
 
@@ -118,7 +121,7 @@ export const analysisApi = {
       const message = detail && typeof detail === 'object' && 'message' in detail
         ? String((detail as { message?: unknown }).message || '')
         : String(response.data?.message || '');
-      throw new Error(message || '大盘复盘正在执行中，请稍后再试');
+      throw new Error(message || pick('大盘复盘正在执行中，请稍后再试', 'A market review is already running. Try again shortly.'));
     }
 
     return toCamelCase<MarketReviewAccepted>(response.data);
@@ -196,7 +199,7 @@ export class DuplicateTaskError extends Error {
   existingTaskId: string;
 
   constructor(stockCode: string, existingTaskId: string, message?: string) {
-    super(message || `股票 ${stockCode} 正在分析中`);
+    super(message || pick(`股票 ${stockCode} 正在分析中`, `${stockCode} is already being analyzed`));
     this.name = 'DuplicateTaskError';
     this.stockCode = stockCode;
     this.existingTaskId = existingTaskId;

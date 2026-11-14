@@ -10,6 +10,7 @@ import type {
   ReportLanguage,
 } from '../../types/analysis';
 import { markdownToPlainText } from '../../utils/markdown';
+import { localizeIndexName, localizeSectorName } from '../../utils/marketLabels';
 import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { Card } from '../common';
 import { Tooltip } from '../common/Tooltip';
@@ -630,7 +631,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
                       <tbody className="divide-y divide-subtle">
                         {marketData.indices.map((index) => (
                           <tr key={index.code || index.name}>
-                            <td className="px-2 py-2 font-medium text-foreground">{index.name}</td>
+                            <td className="px-2 py-2 font-medium text-foreground">{localizeIndexName(index.code, index.name, normalizedReportLanguage)}</td>
                             <td className="px-2 py-2 text-secondary-text">{formatMarketNumber(index.current)}</td>
                             <td className="px-2 py-2 text-secondary-text">{formatMarketPercent(index.changePct)}</td>
                             <td className="px-2 py-2 text-secondary-text">{formatMarketHighLow(index.high, index.low)}</td>
@@ -673,7 +674,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
                         <div className="space-y-1.5">
                           {rows.slice(0, 5).map((item, index) => (
                             <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                              <span className="min-w-0 truncate text-foreground">{item.name}</span>
+                              <span className="min-w-0 truncate text-foreground">{localizeSectorName(item.name, normalizedReportLanguage)}</span>
                               <span className="shrink-0 font-mono text-secondary-text">
                                 {formatRankingChange(item.changePct)}
                               </span>

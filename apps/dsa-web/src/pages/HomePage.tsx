@@ -29,6 +29,8 @@ import { useWatchlist } from '../hooks/useWatchlist';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import type { SetupStatusResponse } from '../types/systemConfig';
 import { normalizeReportLanguage } from '../utils/reportLanguage';
+import { localizeSkillDescription, localizeSkillId } from '../utils/skillLabels';
+import { localizeSetupCheck } from '../utils/setupCheckLabels';
 import type {
   AnalyzeAsyncResponse,
   HistoryItem,
@@ -537,11 +539,11 @@ const HomePage: React.FC = () => {
       { id: '', name: t('home.defaultStrategyName'), description: t('home.defaultStrategyDescription') },
       ...analysisSkills.map((skill) => ({
         id: skill.id,
-        name: skill.name,
-        description: skill.description,
+        name: localizeSkillId(skill.id, skill.name, uiLanguage),
+        description: localizeSkillDescription(skill.description, uiLanguage),
       })),
     ],
-    [analysisSkills, t],
+    [analysisSkills, t, uiLanguage],
   );
   const closeStrategyMenu = useCallback((restoreFocus = false) => {
     setStrategyMenuOpen(false);
@@ -634,7 +636,7 @@ const HomePage: React.FC = () => {
     }
     const requiredNeedsAction = setupStatus.checks
       .filter((check) => check.required && check.status === 'needs_action')
-      .map((check) => check.title);
+      .map((check) => localizeSetupCheck(check, uiLanguage).title);
     return requiredNeedsAction.slice(0, 3).join(uiLanguage === 'en' ? ', ' : '、');
   }, [setupStatus, uiLanguage]);
 
@@ -1517,19 +1519,20 @@ const HomePage: React.FC = () => {
   return (
     <div
       data-testid="home-dashboard"
-      className="flex h-[calc(100vh-5rem)] w-full flex-col overflow-hidden md:flex-row sm:h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-2rem)]"
+      className="flex h-[calc(100vh-5rem)] w-full flex-col overflow-hidden lg:flex-row sm:h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-2rem)]"
     >
       <div className="flex-1 flex flex-col min-h-0 min-w-0 max-w-full lg:max-w-6xl mx-auto w-full">
-        <header className="relative z-30 flex min-w-0 flex-shrink-0 items-center overflow-visible px-3 py-3 md:px-4 md:py-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row md:items-center">
+        <header className="relative z-30 flex min-w-0 flex-shrink-0 items-center overflow-visible px-3 py-3 lg:px-4 lg:py-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row lg:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden -ml-1 flex-shrink-0 rounded-lg p-1.5 text-secondary-text transition-colors hover:bg-hover hover:text-foreground"
+                className="lg:hidden -ml-1 flex-shrink-0 rounded-lg p-1.5 text-secondary-text transition-colors hover:bg-hover hover:text-foreground"
                 aria-label={t('home.historyButton')}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
                 </svg>
               </button>
               <div className="relative min-w-0 flex-1">
@@ -1620,7 +1623,7 @@ const HomePage: React.FC = () => {
                 isLoading={isSubmittingMarketReview}
                 loadingText={t('home.submitMarketReview')}
                 onClick={() => void handleTriggerMarketReview()}
-                className="h-10 flex-1 whitespace-nowrap md:flex-none"
+                className="h-10 flex-1 whitespace-nowrap lg:flex-none"
               >
                 <BarChart3 className="h-4 w-4" aria-hidden="true" />
                 {t('home.marketReview')}
@@ -1629,7 +1632,7 @@ const HomePage: React.FC = () => {
                 type="button"
                 onClick={() => handleSubmitAnalysis()}
                 disabled={!query || isAnalyzing}
-                className="btn-primary flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap md:flex-none"
+                className="btn-primary flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap lg:flex-none"
               >
                 {isAnalyzing ? (
                   <>
@@ -1648,7 +1651,7 @@ const HomePage: React.FC = () => {
         </header>
 
         {inputError || (duplicateError && duplicateBannerVisible) ? (
-          <div className="px-3 pb-2 md:px-4">
+          <div className="px-3 pb-2 lg:px-4">
             {inputError ? (
               <InlineAlert
                 variant="danger"
@@ -1679,7 +1682,7 @@ const HomePage: React.FC = () => {
         ) : null}
 
         {setupNeedsAction ? (
-          <div className="px-3 pb-2 md:px-4">
+          <div className="px-3 pb-2 lg:px-4">
             <InlineAlert
               variant="warning"
               title={t('home.setupIncomplete')}
@@ -1704,12 +1707,12 @@ const HomePage: React.FC = () => {
         ) : null}
 
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          <div className="hidden min-h-0 w-64 shrink-0 flex-col overflow-hidden pl-4 pb-4 md:flex lg:w-72">
+          <div className="hidden min-h-0 w-64 shrink-0 flex-col overflow-hidden pl-4 pb-4 lg:flex lg:w-72">
             {sidebarContent}
           </div>
 
           {sidebarOpen ? (
-            <div className="fixed inset-0 z-40 md:hidden" onClick={() => setSidebarOpen(false)}>
+            <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
               <div className="page-drawer-overlay absolute inset-0" />
               <div
                 className="dashboard-card absolute bottom-0 left-0 top-0 flex w-72 flex-col overflow-hidden !rounded-none !rounded-r-xl p-3 shadow-2xl"
@@ -1723,7 +1726,7 @@ const HomePage: React.FC = () => {
           <section
             ref={dashboardScrollRef}
             data-testid="home-dashboard-scroll"
-            className="flex-1 min-w-0 min-h-0 overflow-x-auto overflow-y-auto px-3 pb-4 md:px-6 touch-pan-y"
+            className="flex-1 min-w-0 min-h-0 overflow-x-auto overflow-y-auto px-3 pb-4 lg:px-6 touch-pan-y"
           >
             {marketReviewNotice ? (
               <div className="mb-3">

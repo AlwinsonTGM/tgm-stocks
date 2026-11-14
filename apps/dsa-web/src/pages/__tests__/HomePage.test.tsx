@@ -3377,6 +3377,52 @@ describe('HomePage', () => {
     expect(trigger).toHaveFocus();
   });
 
+  it('renders strategy names and descriptions in English when the UI language is English', async () => {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
+    vi.mocked(agentApi.getSkills).mockResolvedValue({
+      default_skill_id: 'bull_trend',
+      skills: [
+        {
+          id: 'bull_trend',
+          name: '默认多头趋势',
+          description: '默认个股分析优先策略，识别多头排列、趋势延续与回踩低吸机会。',
+        },
+        {
+          id: 'ma_golden_cross',
+          name: '均线金叉',
+          description: '检测均线金叉配合量能确认信号，经典的趋势反转/延续信号。',
+        },
+      ],
+    });
+    vi.mocked(historyApi.getList).mockResolvedValue({
+      total: 0,
+      page: 1,
+      limit: 20,
+      items: [],
+    });
+
+    render(
+      <UiLanguageProvider>
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </UiLanguageProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Strategy' }));
+
+    expect(await screen.findByRole('menuitemradio', { name: /Default Bull Trend/ })).toBeInTheDocument();
+    expect(screen.getByText(
+      'The default single-stock strategy. Spots bullish alignment, trend continuation, and pullback entries.',
+    )).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /MA Golden Cross/ })).toBeInTheDocument();
+    expect(screen.getByText(
+      'Detects moving-average golden crosses confirmed by volume. A classic reversal or continuation signal.',
+    )).toBeInTheDocument();
+    expect(screen.queryByText('默认多头趋势')).not.toBeInTheDocument();
+    expect(screen.queryByText('均线金叉')).not.toBeInTheDocument();
+  });
+
   it('renders market review history reports with a dedicated markdown view', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 1,

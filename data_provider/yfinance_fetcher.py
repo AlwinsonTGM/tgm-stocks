@@ -16,7 +16,8 @@ YfinanceFetcher - 兜底数据源 (Priority 4)
 
 import csv
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from io import StringIO
 from typing import Optional, List, Dict, Any
 from urllib.error import HTTPError, URLError
@@ -53,6 +54,54 @@ except (ImportError, ModuleNotFoundError):
 import os
 
 logger = logging.getLogger(__name__)
+
+_CJK_RE = re.compile(r"[㐀-䶿一-鿿豈-﫿]")
+
+
+def _has_cjk(value: Any) -> bool:
+    """True when the text contains CJK characters."""
+    return bool(value) and bool(_CJK_RE.search(str(value)))
+
+
+def _reset_yfinance_cookie_cache() -> None:
+    """Drop yfinance's persisted Yahoo cookie cache.
+
+    yfinance 0.2.x stores the Yahoo cookie in a SQLite cache and reuses it
+    indefinitely. Once Yahoo invalidates that cookie every request answers
+    429, and yfinance never refreshes the cache, so the fetcher stays broken
+    until the file is removed. Clearing it forces a fresh cookie next call.
+    """
+    try:
+        import yfinance as yf
+        from yfinance import cache as yf_cache
+    except Exception:
+        return
+
+    try:
+        yf_cache._CookieDBManager.close_db()
+        yf_cache._CookieDBManager._db = None
+        yf_cache._CookieCacheManager._Cookie_cache = None
+        yf.data.YfData._instances.clear()
+    except Exception:
+        pass
+
+    try:
+        cache_dir = yf_cache._CookieDBManager.get_location()
+    except Exception:
+        return
+    for suffix in ("", "-wal", "-shm"):
+        path = os.path.join(cache_dir, "cookies.db" + suffix)
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+
+def _is_yfinance_rate_limit(exc: BaseException) -> bool:
+    """Return True when yfinance reports Yahoo rate limiting."""
+    return type(exc).__name__ == "YFRateLimitError" or "Too Many Requests" in str(exc)
+
 
 
 class YfinanceFetcher(BaseFetcher):
@@ -181,6 +230,113 @@ class YfinanceFetcher(BaseFetcher):
             logger.warning(f"无法确定股票 {code} 的市场，默认使用深市")
             return f"{code}.SZ"
 
+    _CHART_HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json,text/plain,*/*",
+    }
+
+    def _fetch_chart_direct(self, yf_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """Fetch daily bars straight from Yahoo's chart endpoint.
+
+        The chart endpoint needs no crumb, so it keeps working when Yahoo
+        rate-limits the crumb handshake that yfinance 0.2.x depends on. That
+        handshake answers 429 to plain ``requests`` TLS fingerprints, which
+        leaves yfinance returning empty frames forever.
+        """
+        import requests
+
+        params = {
+            "period1": int(pd.Timestamp(start_date).timestamp()),
+            "period2": int(pd.Timestamp(end_date).timestamp()),
+            "interval": "1d",
+            "events": "div,splits",
+            "includeAdjustedClose": "true",
+        }
+
+        last_error = None
+        for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+            url = f"https://{host}/v8/finance/chart/{yf_code}"
+            try:
+                response = requests.get(
+                    url, params=params, headers=self._CHART_HEADERS, timeout=20
+                )
+                if response.status_code != 200:
+                    last_error = f"HTTP {response.status_code}"
+                    continue
+                payload = response.json()
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                continue
+
+            result = ((payload.get("chart") or {}).get("result") or [None])[0]
+            if not result:
+                last_error = "empty chart result"
+                continue
+
+            timestamps = result.get("timestamp") or []
+            quote = ((result.get("indicators") or {}).get("quote") or [{}])[0]
+            if not timestamps or not quote:
+                last_error = "no timestamps"
+                continue
+
+            timezone = (result.get("meta") or {}).get("exchangeTimezoneName") or "UTC"
+            index = (
+                pd.to_datetime(timestamps, unit="s", utc=True)
+                .tz_convert(timezone)
+                .tz_localize(None)
+                .normalize()
+            )
+            frame = pd.DataFrame(
+                {
+                    "Open": quote.get("open"),
+                    "High": quote.get("high"),
+                    "Low": quote.get("low"),
+                    "Close": quote.get("close"),
+                    "Volume": quote.get("volume"),
+                },
+                index=index,
+            )
+            frame.index.name = "Date"
+            frame = frame.dropna(how="all")
+            if frame.empty:
+                last_error = "all rows empty"
+                continue
+            return frame
+
+        raise DataFetchError(f"Yahoo chart 接口获取失败: {last_error}")
+
+    def _fetch_chart_english_name(self, yf_code: str) -> str:
+        """Return the English display name from the chart endpoint's meta block.
+
+        Yahoo localizes ``shortName`` by request locale, so ``ticker.info`` can
+        hand back a Chinese name for a US ticker. The chart endpoint's meta
+        block carries the English name regardless.
+        """
+        import requests
+
+        for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+            try:
+                response = requests.get(
+                    f"https://{host}/v8/finance/chart/{yf_code}",
+                    params={"range": "1d", "interval": "1d"},
+                    headers=self._CHART_HEADERS,
+                    timeout=15,
+                )
+                if response.status_code != 200:
+                    continue
+                result = ((response.json().get("chart") or {}).get("result") or [{}])[0]
+                meta = result.get("meta") or {}
+                for key in ("longName", "shortName"):
+                    value = str(meta.get(key) or "").strip()
+                    if value and not _has_cjk(value):
+                        return value
+            except Exception:
+                continue
+        return ""
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=30),
@@ -205,9 +361,8 @@ class YfinanceFetcher(BaseFetcher):
 
         logger.debug(f"调用 yfinance.download({yf_code}, {start_date}, {end_date})")
 
-        try:
-            # 使用 yfinance 下载数据
-            df = yf.download(
+        def _download() -> pd.DataFrame:
+            frame = yf.download(
                 tickers=yf_code,
                 start=start_date,
                 end=end_date,
@@ -217,11 +372,27 @@ class YfinanceFetcher(BaseFetcher):
             )
 
             # 筛选出 yf_code 的列, 避免多只股票数据混淆
-            if isinstance(df.columns, pd.MultiIndex) and len(df.columns) > 1:
-                ticker_level = df.columns.get_level_values(1)
+            if isinstance(frame.columns, pd.MultiIndex) and len(frame.columns) > 1:
+                ticker_level = frame.columns.get_level_values(1)
                 mask = ticker_level == yf_code
                 if mask.any():
-                    df = df.loc[:, mask].copy()
+                    frame = frame.loc[:, mask].copy()
+            return frame
+
+        try:
+            # chart 接口不需要 crumb 握手，Yahoo 限流 crumb 时仍然可用，
+            # 因此优先直连；失败再回退到 yfinance。
+            try:
+                df = self._fetch_chart_direct(yf_code, start_date, end_date)
+            except Exception as direct_error:
+                logger.debug(f"[Yfinance] chart 直连失败，回退 yfinance: {direct_error}")
+                df = _download()
+
+                # 失效的持久化 cookie 会让 Yahoo 对每个请求都回 429，而 yfinance
+                # 把 429 吞成空 DataFrame。清掉缓存再试一次即可自愈。
+                if df.empty:
+                    _reset_yfinance_cookie_cache()
+                    df = _download()
 
             if df.empty:
                 raise DataFetchError(f"Yahoo Finance 未查询到 {stock_code} 的数据")
@@ -318,9 +489,22 @@ class YfinanceFetcher(BaseFetcher):
         Returns:
             行情字典，失败时返回 None
         """
-        ticker = yf.Ticker(yf_code)
         # 取近两日数据以计算涨跌幅
-        hist = ticker.history(period='2d')
+        try:
+            hist = yf.Ticker(yf_code).history(period='2d')
+        except Exception as exc:
+            # Yahoo 限流 crumb 握手时 yfinance 直接抛错，而 chart 接口
+            # 不需要 crumb，可以照常取到数据。
+            if not _is_yfinance_rate_limit(exc):
+                raise
+            logger.debug(f"[Yfinance] 指数 {yf_code} 被限流，改用 chart 直连")
+            end_dt = datetime.now() + timedelta(days=1)
+            start_dt = end_dt - timedelta(days=10)
+            hist = self._fetch_chart_direct(
+                yf_code,
+                start_dt.strftime("%Y-%m-%d"),
+                end_dt.strftime("%Y-%m-%d"),
+            )
         if hist.empty:
             return None
         today_row = hist.iloc[-1]
@@ -791,7 +975,7 @@ class YfinanceFetcher(BaseFetcher):
             logger.warning(f"[Yfinance] 获取美股指数 {user_code} 实时行情失败: {e}")
             return None
 
-    def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
+    def get_realtime_quote(self, stock_code: str, _retried: bool = False) -> Optional[UnifiedRealtimeQuote]:
         """
         获取美股、港股、日韩台股票或美股指数实时行情数据
 
@@ -848,9 +1032,19 @@ class YfinanceFetcher(BaseFetcher):
                 market_cap = getattr(info, 'marketCap', None) or getattr(info, 'market_cap', None)
 
             except Exception:
-                # 回退到 history 方法获取最新数据
-                logger.debug("[Yfinance] fast_info 失败，尝试 history 方法")
-                hist = ticker.history(period='2d')
+                # 回退到 chart 直连获取最新数据（不依赖 crumb 握手）
+                logger.debug("[Yfinance] fast_info 失败，尝试 chart 直连")
+                end_dt = datetime.now() + timedelta(days=1)
+                start_dt = end_dt - timedelta(days=10)
+                try:
+                    hist = self._fetch_chart_direct(
+                        symbol,
+                        start_dt.strftime("%Y-%m-%d"),
+                        end_dt.strftime("%Y-%m-%d"),
+                    )
+                except Exception as chart_exc:
+                    logger.debug(f"[Yfinance] chart 直连失败: {chart_exc}")
+                    hist = pd.DataFrame()
                 if hist.empty:
                     if is_us_symbol:
                         logger.warning(f"[Yfinance] 无法获取 {symbol} 的数据，尝试 Stooq 兜底")
@@ -891,6 +1085,13 @@ class YfinanceFetcher(BaseFetcher):
                 name = info_name if is_meaningful_stock_name(info_name, symbol) else STOCK_NAME_MAP.get(symbol, '')
             except Exception:
                 name = STOCK_NAME_MAP.get(symbol, '')
+
+            # Yahoo 按请求方语言返回本地化名称（例如 AAPL -> 苹果），
+            # 英文报告里出现中文名很突兀，因此回退到 chart 接口的英文名。
+            if _has_cjk(name):
+                english_name = self._fetch_chart_english_name(symbol)
+                if english_name:
+                    name = english_name
 
             # 复用上方已获取的 ticker_info，无额外请求
             pe_ratio = _safe_float(ticker_info.get('trailingPE'))
@@ -938,6 +1139,10 @@ class YfinanceFetcher(BaseFetcher):
             return quote
 
         except Exception as e:
+            if not _retried and _is_yfinance_rate_limit(e):
+                logger.warning(f"[Yfinance] {stock_code} 实时行情被限流，清理 cookie 缓存后重试")
+                _reset_yfinance_cookie_cache()
+                return self.get_realtime_quote(stock_code, _retried=True)
             if self._is_us_stock(stock_code):
                 logger.warning(f"[Yfinance] 获取美股 {stock_code} 实时行情失败: {e}，尝试 Stooq 兜底")
                 return self._get_us_stock_quote_from_stooq(stock_code)

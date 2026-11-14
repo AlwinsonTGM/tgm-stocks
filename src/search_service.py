@@ -126,7 +126,17 @@ def _call_topic_news_in_subprocess(
                 name="search-topic-news",
                 daemon=True,
             )
-            process.start()
+            try:
+                process.start()
+            except (OSError, ValueError, NotImplementedError, RuntimeError):
+                # Android's embedded Python cannot spawn processes, so the deadline cannot
+                # be enforced. Run inline rather than losing topic-news search entirely.
+                service = SearchService(**constructor_kwargs)
+                return service.search_topic_news(
+                    topic,
+                    max_results=max_results,
+                    focus_keywords=focus_keywords,
+                )
             process_started = True
             child_conn.close()
             child_conn = None

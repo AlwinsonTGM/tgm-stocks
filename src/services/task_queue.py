@@ -813,6 +813,7 @@ class AnalysisTaskQueue:
                     query_id=task_id,
                     stock_code=stock_code,
                     trigger_source=query_source,
+                    report_language=report_language,
                     event_sink=lambda event: self.append_task_flow_event(task_id, event),
                 )
             result = service.analyze_stock(
@@ -929,6 +930,7 @@ class AnalysisTaskQueue:
                     query_id=task_id,
                     stock_code=task.stock_code,
                     trigger_source="api",
+                    report_language=getattr(task, "report_language", None),
                     event_sink=lambda event: self.append_task_flow_event(task_id, event),
                 )
             try:

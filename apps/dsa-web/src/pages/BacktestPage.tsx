@@ -43,6 +43,7 @@ function phaseLabel(row: BacktestResultItem, language: UiLanguage): string {
   if (label) {
     return label
       .replace('市场阶段: ', '')
+      .replace('Market phase: ', '')
       .replace('市场阶段：', '')
       .replace('Market phase: ', '');
   }

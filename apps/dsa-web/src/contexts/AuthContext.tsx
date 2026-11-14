@@ -3,6 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { createParsedApiError, getParsedApiError, type ParsedApiError } from '../api/error';
 import { authApi } from '../api/auth';
 import { useStockPoolStore } from '../stores';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 type AuthContextValue = {
   authEnabled: boolean;
@@ -28,8 +31,8 @@ function extractLoginError(err: unknown): ParsedApiError {
   const parsed = getParsedApiError(err);
   if (parsed.status === 429) {
     return createParsedApiError({
-      title: '登录尝试过于频繁',
-      message: '尝试次数过多，请稍后再试。',
+      title: pick('登录尝试过于频繁', 'Too many sign-in attempts'),
+      message: pick('尝试次数过多，请稍后再试。', 'Too many attempts. Try again shortly.'),
       rawMessage: parsed.rawMessage,
       status: parsed.status,
       category: parsed.category,

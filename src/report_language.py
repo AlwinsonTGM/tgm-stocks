@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from src.schemas.decision_scale import signal_key_for_score
 
@@ -296,6 +296,430 @@ _BIAS_STATUS_TRANSLATIONS = {
     "safe": {"zh": "安全", "en": "Safe", "ko": "안전"},
     "caution": {"zh": "警戒", "en": "Caution", "ko": "경계"},
     "danger": {"zh": "危险", "en": "Danger", "ko": "위험"},
+}
+
+_TREND_STATUS_CANONICAL_MAP = {
+    "强势多头": "strong_bullish",
+    "多头排列": "bullish",
+    "弱势多头": "weak_bullish",
+    "盘整": "consolidation",
+    "弱势空头": "weak_bearish",
+    "空头排列": "bearish",
+    "强势空头": "strong_bearish",
+    "strong_bullish": "strong_bullish",
+    "bullish": "bullish",
+    "weak_bullish": "weak_bullish",
+    "consolidation": "consolidation",
+    "weak_bearish": "weak_bearish",
+    "bearish": "bearish",
+    "strong_bearish": "strong_bearish",
+    "강한 상승 배열": "strong_bullish",
+    "상승 배열": "bullish",
+    "약한 상승": "weak_bullish",
+    "횡보": "consolidation",
+    "약한 하락": "weak_bearish",
+    "하락 배열": "bearish",
+    "강한 하락 배열": "strong_bearish",
+}
+
+_TREND_STATUS_TRANSLATIONS = {
+    "strong_bullish": {"zh": "强势多头", "en": "Strong bull", "ko": "강한 상승 배열"},
+    "bullish": {"zh": "多头排列", "en": "Bullish alignment", "ko": "상승 배열"},
+    "weak_bullish": {"zh": "弱势多头", "en": "Weak bull", "ko": "약한 상승"},
+    "consolidation": {"zh": "盘整", "en": "Consolidation", "ko": "횡보"},
+    "weak_bearish": {"zh": "弱势空头", "en": "Weak bear", "ko": "약한 하락"},
+    "bearish": {"zh": "空头排列", "en": "Bearish alignment", "ko": "하락 배열"},
+    "strong_bearish": {"zh": "强势空头", "en": "Strong bear", "ko": "강한 하락 배열"},
+}
+
+_MA_ALIGNMENT_CANONICAL_MAP = {
+    "强势多头排列，均线发散上行": "strong_bullish_diverging",
+    "多头排列 MA5>MA10>MA20": "bullish_aligned",
+    "弱势多头，MA5>MA10 但 MA10≤MA20": "weak_bullish",
+    "强势空头排列，均线发散下行": "strong_bearish_diverging",
+    "空头排列 MA5<MA10<MA20": "bearish_aligned",
+    "弱势空头，MA5<MA10 但 MA10≥MA20": "weak_bearish",
+    "均线缠绕，趋势不明": "tangled",
+}
+
+_MA_ALIGNMENT_TRANSLATIONS = {
+    "strong_bullish_diverging": {
+        "zh": "强势多头排列，均线发散上行",
+        "en": "Strong bullish alignment, MAs fanning upward",
+        "ko": "강한 상승 배열, 이동평균선 상향 발산",
+    },
+    "bullish_aligned": {
+        "zh": "多头排列 MA5>MA10>MA20",
+        "en": "Bullish alignment MA5>MA10>MA20",
+        "ko": "상승 배열 MA5>MA10>MA20",
+    },
+    "weak_bullish": {
+        "zh": "弱势多头，MA5>MA10 但 MA10≤MA20",
+        "en": "Weak bull, MA5>MA10 but MA10<=MA20",
+        "ko": "약한 상승, MA5>MA10 이나 MA10<=MA20",
+    },
+    "strong_bearish_diverging": {
+        "zh": "强势空头排列，均线发散下行",
+        "en": "Strong bearish alignment, MAs fanning downward",
+        "ko": "강한 하락 배열, 이동평균선 하향 발산",
+    },
+    "bearish_aligned": {
+        "zh": "空头排列 MA5<MA10<MA20",
+        "en": "Bearish alignment MA5<MA10<MA20",
+        "ko": "하락 배열 MA5<MA10<MA20",
+    },
+    "weak_bearish": {
+        "zh": "弱势空头，MA5<MA10 但 MA10≥MA20",
+        "en": "Weak bear, MA5<MA10 but MA10>=MA20",
+        "ko": "약한 하락, MA5<MA10 이나 MA10>=MA20",
+    },
+    "tangled": {
+        "zh": "均线缠绕，趋势不明",
+        "en": "MAs tangled, trend unclear",
+        "ko": "이동평균선 얽힘, 추세 불명",
+    },
+}
+
+_VOLUME_STATUS_CANONICAL_MAP = {
+    "放量上涨": "heavy_volume_up",
+    "放量下跌": "heavy_volume_down",
+    "缩量上涨": "shrink_volume_up",
+    "缩量回调": "shrink_volume_down",
+    "量能正常": "normal",
+    "heavy_volume_up": "heavy_volume_up",
+    "heavy_volume_down": "heavy_volume_down",
+    "shrink_volume_up": "shrink_volume_up",
+    "shrink_volume_down": "shrink_volume_down",
+    "normal": "normal",
+    "거래량 증가 상승": "heavy_volume_up",
+    "거래량 증가 하락": "heavy_volume_down",
+    "거래량 감소 상승": "shrink_volume_up",
+    "거래량 감소 조정": "shrink_volume_down",
+    "거래량 정상": "normal",
+}
+
+_VOLUME_STATUS_TRANSLATIONS = {
+    "heavy_volume_up": {"zh": "放量上涨", "en": "Heavy volume up", "ko": "거래량 증가 상승"},
+    "heavy_volume_down": {"zh": "放量下跌", "en": "Heavy volume down", "ko": "거래량 증가 하락"},
+    "shrink_volume_up": {"zh": "缩量上涨", "en": "Shrinking volume up", "ko": "거래량 감소 상승"},
+    "shrink_volume_down": {"zh": "缩量回调", "en": "Shrinking volume pullback", "ko": "거래량 감소 조정"},
+    "normal": {"zh": "量能正常", "en": "Normal volume", "ko": "거래량 정상"},
+}
+
+_VOLUME_TREND_CANONICAL_MAP = {
+    "放量上涨，多头力量强劲": "heavy_volume_up",
+    "放量下跌，注意风险": "heavy_volume_down",
+    "缩量上涨，上攻动能不足": "shrink_volume_up",
+    "缩量回调，洗盘特征明显（好）": "shrink_volume_down",
+    "量能正常": "normal",
+}
+
+_VOLUME_TREND_TRANSLATIONS = {
+    "heavy_volume_up": {
+        "zh": "放量上涨，多头力量强劲",
+        "en": "Heavy volume up, bulls in control",
+        "ko": "거래량 증가 상승, 매수세 강함",
+    },
+    "heavy_volume_down": {
+        "zh": "放量下跌，注意风险",
+        "en": "Heavy volume down, mind the risk",
+        "ko": "거래량 증가 하락, 리스크 주의",
+    },
+    "shrink_volume_up": {
+        "zh": "缩量上涨，上攻动能不足",
+        "en": "Shrinking volume up, weak upside momentum",
+        "ko": "거래량 감소 상승, 상승 동력 부족",
+    },
+    "shrink_volume_down": {
+        "zh": "缩量回调，洗盘特征明显（好）",
+        "en": "Shrinking volume pullback, classic shakeout (good)",
+        "ko": "거래량 감소 조정, 전형적 흔들기 (양호)",
+    },
+    "normal": {"zh": "量能正常", "en": "Normal volume", "ko": "거래량 정상"},
+}
+
+_MA_STATUS_CANONICAL_MAP = {
+    "多头排列 📈": "bullish",
+    "空头排列 📉": "bearish",
+    "短期向好 🔼": "short_term_up",
+    "短期走弱 🔽": "short_term_down",
+    "震荡整理 ↔️": "sideways",
+}
+
+_MA_STATUS_TRANSLATIONS = {
+    "bullish": {"zh": "多头排列 📈", "en": "Bullish alignment 📈", "ko": "상승 배열 📈"},
+    "bearish": {"zh": "空头排列 📉", "en": "Bearish alignment 📉", "ko": "하락 배열 📉"},
+    "short_term_up": {"zh": "短期向好 🔼", "en": "Short-term improving 🔼", "ko": "단기 개선 🔼"},
+    "short_term_down": {"zh": "短期走弱 🔽", "en": "Short-term weakening 🔽", "ko": "단기 약세 🔽"},
+    "sideways": {"zh": "震荡整理 ↔️", "en": "Range-bound ↔️", "ko": "횡보 정리 ↔️"},
+}
+
+_VOLUME_RATIO_DESC_CANONICAL_MAP = {
+    "极度萎缩": "very_low",
+    "明显萎缩": "low",
+    "正常": "normal",
+    "温和放量": "mild_high",
+    "明显放量": "high",
+    "巨量": "very_high",
+}
+
+_VOLUME_RATIO_DESC_TRANSLATIONS = {
+    "very_low": {"zh": "极度萎缩", "en": "Extremely thin", "ko": "극도로 위축"},
+    "low": {"zh": "明显萎缩", "en": "Clearly thin", "ko": "뚜렷한 위축"},
+    "normal": {"zh": "正常", "en": "Normal", "ko": "정상"},
+    "mild_high": {"zh": "温和放量", "en": "Mildly elevated", "ko": "완만한 증가"},
+    "high": {"zh": "明显放量", "en": "Clearly elevated", "ko": "뚜렷한 증가"},
+    "very_high": {"zh": "巨量", "en": "Very heavy", "ko": "대량"},
+}
+
+_MACD_SIGNAL_CANONICAL_MAP = {
+    "数据不足": "insufficient_data",
+    "零轴上金叉，强烈买入信号！": "golden_cross_zero",
+    "DIF上穿零轴，趋势转强": "crossing_up",
+    "金叉，趋势向上": "golden_cross",
+    "死叉，趋势向下": "death_cross",
+    "DIF下穿零轴，趋势转弱": "crossing_down",
+    "多头排列，持续上涨": "bullish",
+    "空头排列，持续下跌": "bearish",
+    "MACD 中性区域": "neutral",
+}
+
+_MACD_SIGNAL_TRANSLATIONS = {
+    "insufficient_data": {"zh": "数据不足", "en": "Insufficient data", "ko": "데이터 부족"},
+    "golden_cross_zero": {
+        "zh": "零轴上金叉，强烈买入信号！",
+        "en": "Golden cross above zero, strong buy signal",
+        "ko": "영선 위 골든크로스, 강한 매수 신호",
+    },
+    "crossing_up": {
+        "zh": "DIF上穿零轴，趋势转强",
+        "en": "DIF crossed above zero, trend strengthening",
+        "ko": "DIF 영선 상향 돌파, 추세 강화",
+    },
+    "golden_cross": {
+        "zh": "金叉，趋势向上",
+        "en": "Golden cross, trend turning up",
+        "ko": "골든크로스, 추세 상승",
+    },
+    "death_cross": {
+        "zh": "死叉，趋势向下",
+        "en": "Death cross, trend turning down",
+        "ko": "데드크로스, 추세 하락",
+    },
+    "crossing_down": {
+        "zh": "DIF下穿零轴，趋势转弱",
+        "en": "DIF crossed below zero, trend weakening",
+        "ko": "DIF 영선 하향 돌파, 추세 약화",
+    },
+    "bullish": {
+        "zh": "多头排列，持续上涨",
+        "en": "Bullish alignment, sustained advance",
+        "ko": "상승 배열, 지속 상승",
+    },
+    "bearish": {
+        "zh": "空头排列，持续下跌",
+        "en": "Bearish alignment, sustained decline",
+        "ko": "하락 배열, 지속 하락",
+    },
+    "neutral": {
+        "zh": "MACD 中性区域",
+        "en": "MACD neutral zone",
+        "ko": "MACD 중립 구간",
+    },
+}
+
+_MACD_SIGNAL_MARKERS = {
+    "insufficient_data": "",
+    "golden_cross_zero": "⭐",
+    "crossing_up": "⚡",
+    "golden_cross": "✅",
+    "death_cross": "❌",
+    "crossing_down": "⚠️",
+    "bullish": "✓",
+    "bearish": "⚠",
+    "neutral": "",
+}
+
+_RSI_SIGNAL_PATTERNS = (
+    (re.compile(r"^数据不足$"), "insufficient_data"),
+    (re.compile(r"^RSI超买\((?P<value>[\d.]+)>70\)，短期回调风险高$"), "overbought"),
+    (re.compile(r"^RSI强势\((?P<value>[\d.]+)\)，多头力量充足$"), "strong"),
+    (re.compile(r"^RSI中性\((?P<value>[\d.]+)\)，震荡整理中$"), "neutral"),
+    (re.compile(r"^RSI弱势\((?P<value>[\d.]+)\)，关注反弹$"), "weak"),
+    (re.compile(r"^RSI超卖\((?P<value>[\d.]+)<30\)，反弹机会大$"), "oversold"),
+)
+
+_RSI_SIGNAL_TRANSLATIONS = {
+    "insufficient_data": {"zh": "数据不足", "en": "Insufficient data", "ko": "데이터 부족"},
+    "overbought": {
+        "zh": "RSI超买({value}>70)，短期回调风险高",
+        "en": "RSI overbought ({value}>70), high short-term pullback risk",
+        "ko": "RSI 과매수({value}>70), 단기 조정 위험 높음",
+    },
+    "strong": {
+        "zh": "RSI强势({value})，多头力量充足",
+        "en": "RSI strong ({value}), bulls have room",
+        "ko": "RSI 강세({value}), 매수세 충분",
+    },
+    "neutral": {
+        "zh": "RSI中性({value})，震荡整理中",
+        "en": "RSI neutral ({value}), range-bound",
+        "ko": "RSI 중립({value}), 횡보 정리 중",
+    },
+    "weak": {
+        "zh": "RSI弱势({value})，关注反弹",
+        "en": "RSI weak ({value}), watch for a bounce",
+        "ko": "RSI 약세({value}), 반등 주시",
+    },
+    "oversold": {
+        "zh": "RSI超卖({value}<30)，反弹机会大",
+        "en": "RSI oversold ({value}<30), strong bounce odds",
+        "ko": "RSI 과매도({value}<30), 반등 기회 큼",
+    },
+}
+
+_RSI_SIGNAL_MARKERS = {
+    "insufficient_data": "",
+    "overbought": "⚠️",
+    "strong": "✅",
+    "neutral": "",
+    "weak": "⚡",
+    "oversold": "⭐",
+}
+
+_TREND_SIGNAL_PATTERNS = (
+    (
+        re.compile(
+            r"^(?:✅\s*)?(?P<trend>强势多头|多头排列|弱势多头|盘整|弱势空头|空头排列|强势空头)，顺势做多$"
+        ),
+        "reason_trend_bullish",
+    ),
+    (
+        re.compile(
+            r"^(?:⚠️?\s*)?(?P<trend>强势多头|多头排列|弱势多头|盘整|弱势空头|空头排列|强势空头)，不宜做多$"
+        ),
+        "risk_trend_bearish",
+    ),
+    (
+        re.compile(r"^(?:✅\s*)?价格略低于MA5\((?P<value>-?[\d.]+)%\)，回踩买点$"),
+        "reason_bias_pullback",
+    ),
+    (
+        re.compile(r"^(?:✅\s*)?价格回踩MA5\((?P<value>-?[\d.]+)%\)，观察支撑$"),
+        "reason_bias_watch_support",
+    ),
+    (
+        re.compile(r"^(?:⚠️?\s*)?乖离率过大\((?P<value>-?[\d.]+)%\)，可能破位$"),
+        "risk_bias_breakdown",
+    ),
+    (
+        re.compile(r"^(?:✅\s*)?价格贴近MA5\((?P<value>-?[\d.]+)%\)，介入好时机$"),
+        "reason_bias_near_ma5",
+    ),
+    (
+        re.compile(r"^(?:⚡\s*)?价格略高于MA5\((?P<value>-?[\d.]+)%\)，可小仓介入$"),
+        "reason_bias_above_ma5",
+    ),
+    (
+        re.compile(
+            r"^(?:❌\s*)?乖离率过高\((?P<value>-?[\d.]+)%>(?P<threshold>-?[\d.]+)%\)，严禁追高！$"
+        ),
+        "risk_bias_chase",
+    ),
+    (
+        re.compile(r"^(?:⚡\s*)?强势趋势中乖离率偏高\((?P<value>-?[\d.]+)%\)，可轻仓追踪$"),
+        "reason_bias_strong_trend",
+    ),
+    (re.compile(r"^(?:✅\s*)?缩量回调，主力洗盘$"), "reason_shrink_volume_pullback"),
+    (re.compile(r"^(?:⚠️?\s*)?放量下跌，注意风险$"), "risk_heavy_volume_down"),
+    (re.compile(r"^(?:✅\s*)?MA5支撑有效$"), "reason_ma5_support"),
+    (re.compile(r"^(?:✅\s*)?MA10支撑有效$"), "reason_ma10_support"),
+)
+
+_TREND_SIGNAL_TEMPLATES = {
+    "reason_trend_bullish": {
+        "zh": "✅ {trend}，顺势做多",
+        "en": "✅ {trend}, trend-following long setup",
+        "ko": "✅ {trend}, 추세 추종 매수 구간",
+    },
+    "risk_trend_bearish": {
+        "zh": "⚠️ {trend}，不宜做多",
+        "en": "⚠️ {trend}, avoid long exposure",
+        "ko": "⚠️ {trend}, 매수 비권장",
+    },
+    "reason_bias_pullback": {
+        "zh": "✅ 价格略低于MA5({value}%)，回踩买点",
+        "en": "✅ Price slightly below MA5 ({value}%), pullback entry",
+        "ko": "✅ 주가가 MA5({value}%) 소폭 하회, 눌림목 매수",
+    },
+    "reason_bias_watch_support": {
+        "zh": "✅ 价格回踩MA5({value}%)，观察支撑",
+        "en": "✅ Price pulled back to MA5 ({value}%), watch support",
+        "ko": "✅ 주가 MA5({value}%)까지 조정, 지지 확인",
+    },
+    "risk_bias_breakdown": {
+        "zh": "⚠️ 乖离率过大({value}%)，可能破位",
+        "en": "⚠️ Deviation too wide ({value}%), breakdown risk",
+        "ko": "⚠️ 이격도 과대({value}%), 이탈 위험",
+    },
+    "reason_bias_near_ma5": {
+        "zh": "✅ 价格贴近MA5({value}%)，介入好时机",
+        "en": "✅ Price hugging MA5 ({value}%), good entry",
+        "ko": "✅ 주가 MA5({value}%) 근접, 진입 적기",
+    },
+    "reason_bias_above_ma5": {
+        "zh": "⚡ 价格略高于MA5({value}%)，可小仓介入",
+        "en": "⚡ Price slightly above MA5 ({value}%), small position only",
+        "ko": "⚡ 주가가 MA5({value}%) 소폭 상회, 소액 진입 가능",
+    },
+    "risk_bias_chase": {
+        "zh": "❌ 乖离率过高({value}%>{threshold}%)，严禁追高！",
+        "en": "❌ Deviation too high ({value}%>{threshold}%), do not chase",
+        "ko": "❌ 이격도 과다({value}%>{threshold}%), 추격 매수 금지",
+    },
+    "reason_bias_strong_trend": {
+        "zh": "⚡ 强势趋势中乖离率偏高({value}%)，可轻仓追踪",
+        "en": "⚡ Elevated deviation in a strong trend ({value}%), light position only",
+        "ko": "⚡ 강한 추세 중 이격도 높음({value}%), 소량 추종 가능",
+    },
+    "reason_shrink_volume_pullback": {
+        "zh": "✅ 缩量回调，主力洗盘",
+        "en": "✅ Shrinking-volume pullback, shakeout",
+        "ko": "✅ 거래량 감소 조정, 세력 흔들기",
+    },
+    "risk_heavy_volume_down": {
+        "zh": "⚠️ 放量下跌，注意风险",
+        "en": "⚠️ Heavy-volume decline, mind the risk",
+        "ko": "⚠️ 거래량 증가 하락, 리스크 주의",
+    },
+    "reason_ma5_support": {
+        "zh": "✅ MA5支撑有效",
+        "en": "✅ MA5 support holds",
+        "ko": "✅ MA5 지지 유효",
+    },
+    "reason_ma10_support": {
+        "zh": "✅ MA10支撑有效",
+        "en": "✅ MA10 support holds",
+        "ko": "✅ MA10 지지 유효",
+    },
+}
+
+_SIGNAL_MARKER_PATTERN = re.compile(r"^((?:[✅⚠⚡❌✓⭐]\uFE0F?\s*)+)")
+
+_BOARD_TYPE_CANONICAL_MAP = {
+    "行业": "industry",
+    "概念": "concept",
+    "地域": "region",
+    "指数": "index",
+    "板块": "sector",
+}
+
+_BOARD_TYPE_TRANSLATIONS = {
+    "industry": {"zh": "行业", "en": "Industry", "ko": "업종"},
+    "concept": {"zh": "概念", "en": "Concept", "ko": "테마"},
+    "region": {"zh": "地域", "en": "Region", "ko": "지역"},
+    "index": {"zh": "指数", "en": "Index", "ko": "지수"},
+    "sector": {"zh": "板块", "en": "Sector", "ko": "섹터"},
 }
 
 _PLACEHOLDER_BY_LANGUAGE = {
@@ -962,6 +1386,49 @@ def _translate_from_map(
     return raw_text
 
 
+_INDEX_NAME_ENGLISH = {
+    # US
+    "标普500指数": "S&P 500",
+    "道琼斯工业指数": "Dow Jones Industrial Average",
+    "纳斯达克综合指数": "Nasdaq Composite",
+    "纳斯达克100指数": "Nasdaq 100",
+    "VIX恐慌指数": "VIX",
+    "罗素2000指数": "Russell 2000",
+    # HK
+    "恒生指数": "Hang Seng Index",
+    "恒生科技指数": "Hang Seng TECH Index",
+    "国企指数": "Hang Seng China Enterprises Index",
+    # JP
+    "日经225": "Nikkei 225",
+    "东证指数": "TOPIX",
+    # TW
+    "台湾加权指数": "TAIEX",
+    "台湾柜买指数": "TPEx Index",
+    # CN
+    "上证指数": "Shanghai Composite",
+    "深证成指": "Shenzhen Component",
+    "创业板指": "ChiNext",
+    "科创50": "STAR 50",
+    "上证50": "SSE 50",
+    "沪深300": "CSI 300",
+}
+
+
+def localize_index_name(value: Any, language: Optional[str]) -> str:
+    """Translate a market index display name into the report language.
+
+    Index names are authored in Chinese in the provider mappings. English and
+    Korean reports reuse the English names, since the index brands are
+    internationally recognised in that form.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return text
+    if normalize_report_language(language) == "zh":
+        return text
+    return _INDEX_NAME_ENGLISH.get(text, text)
+
+
 def localize_operation_advice(value: Any, language: Optional[str]) -> str:
     """Translate operation advice between Chinese and English when recognized."""
     return _translate_from_map(
@@ -1219,6 +1686,213 @@ def localize_bias_status(value: Any, language: Optional[str]) -> str:
         canonical_map=_BIAS_STATUS_CANONICAL_MAP,
         translations=_BIAS_STATUS_TRANSLATIONS,
     )
+
+
+def _lookup_canonical(value: Any, canonical_map: Dict[str, str]) -> Optional[str]:
+    """Resolve a canonical key, normalizing both sides of the comparison.
+
+    The trend-analysis maps are authored with their display casing (``MA5``,
+    ``MACD``) while ``_normalize_lookup_key`` lowercases, so the map keys have
+    to be normalized at lookup time rather than stored pre-normalized.
+    """
+    lookup_key = _normalize_lookup_key(value)
+    if not lookup_key:
+        return None
+    for key, canonical in canonical_map.items():
+        if _normalize_lookup_key(key) == lookup_key:
+            return canonical
+    return None
+
+
+def _split_signal_marker(text: str) -> Tuple[str, str]:
+    """Split a leading status marker (``✅``, ``⚠️``, ``⭐``) from its label."""
+    match = _SIGNAL_MARKER_PATTERN.match(text)
+    if not match:
+        return "", text
+    return match.group(1).strip(), text[len(match.group(1)):].strip()
+
+
+def _translate_exact(
+    value: Any,
+    language: Optional[str],
+    *,
+    canonical_map: Dict[str, str],
+    translations: Dict[str, Dict[str, str]],
+) -> str:
+    """Translate a whole-string label without splitting on punctuation.
+
+    ``_translate_from_map`` splits candidates on ``/|,，、`` so multi-clause
+    labels such as ``多头排列 MA5>MA10>MA20`` never match. Trend-analysis
+    labels are matched whole instead.
+    """
+    normalized_language = normalize_report_language(language)
+    raw_text = str(value or "").strip()
+    if not raw_text:
+        return raw_text
+    canonical = _lookup_canonical(raw_text, canonical_map)
+    if canonical:
+        return translations[canonical][normalized_language]
+    return raw_text
+
+
+def localize_trend_status(value: Any, language: Optional[str]) -> str:
+    """Translate a trend status label between Chinese, English and Korean."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_TREND_STATUS_CANONICAL_MAP,
+        translations=_TREND_STATUS_TRANSLATIONS,
+    )
+
+
+def localize_ma_alignment(value: Any, language: Optional[str]) -> str:
+    """Translate a moving-average alignment description."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_MA_ALIGNMENT_CANONICAL_MAP,
+        translations=_MA_ALIGNMENT_TRANSLATIONS,
+    )
+
+
+def localize_volume_status(value: Any, language: Optional[str]) -> str:
+    """Translate a volume status label."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_VOLUME_STATUS_CANONICAL_MAP,
+        translations=_VOLUME_STATUS_TRANSLATIONS,
+    )
+
+
+def localize_volume_trend(value: Any, language: Optional[str]) -> str:
+    """Translate a volume trend description."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_VOLUME_TREND_CANONICAL_MAP,
+        translations=_VOLUME_TREND_TRANSLATIONS,
+    )
+
+
+def localize_ma_status(value: Any, language: Optional[str]) -> str:
+    """Translate the price-versus-MA status label, keeping its emoji."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_MA_STATUS_CANONICAL_MAP,
+        translations=_MA_STATUS_TRANSLATIONS,
+    )
+
+
+def localize_volume_ratio_desc(value: Any, language: Optional[str]) -> str:
+    """Translate a volume-ratio description."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_VOLUME_RATIO_DESC_CANONICAL_MAP,
+        translations=_VOLUME_RATIO_DESC_TRANSLATIONS,
+    )
+
+
+def localize_macd_signal(value: Any, language: Optional[str]) -> str:
+    """Translate a MACD signal description, preserving its status marker."""
+    normalized_language = normalize_report_language(language)
+    raw_text = str(value or "").strip()
+    if not raw_text:
+        return raw_text
+    marker, core = _split_signal_marker(raw_text)
+    canonical = _lookup_canonical(core, _MACD_SIGNAL_CANONICAL_MAP)
+    if not canonical:
+        return raw_text
+    rendered = _MACD_SIGNAL_TRANSLATIONS[canonical][normalized_language]
+    prefix = marker or _MACD_SIGNAL_MARKERS.get(canonical, "")
+    return f"{prefix} {rendered}".strip() if prefix else rendered
+
+
+def localize_rsi_signal(value: Any, language: Optional[str]) -> str:
+    """Translate an RSI signal description, preserving its numeric reading."""
+    normalized_language = normalize_report_language(language)
+    raw_text = str(value or "").strip()
+    if not raw_text:
+        return raw_text
+    marker, core = _split_signal_marker(raw_text)
+    for pattern, key in _RSI_SIGNAL_PATTERNS:
+        match = pattern.match(core)
+        if not match:
+            continue
+        rendered = _RSI_SIGNAL_TRANSLATIONS[key][normalized_language].format(**match.groupdict())
+        prefix = marker or _RSI_SIGNAL_MARKERS.get(key, "")
+        return f"{prefix} {rendered}".strip() if prefix else rendered
+    return raw_text
+
+
+def localize_trend_signal_line(value: Any, language: Optional[str]) -> str:
+    """Translate one trend-analysis reason or risk line.
+
+    Lines are either a fixed template (``✅ 缩量回调，主力洗盘``), a template with
+    numbers (``✅ 价格贴近MA5(0.9%)，介入好时机``), or a leading marker wrapped
+    around an already-composed MACD/RSI signal.
+    """
+    normalized_language = normalize_report_language(language)
+    raw_text = str(value or "").strip()
+    if not raw_text or normalized_language == "zh":
+        return raw_text
+
+    for pattern, key in _TREND_SIGNAL_PATTERNS:
+        match = pattern.match(raw_text)
+        if match:
+            groups = match.groupdict()
+            if groups.get("trend"):
+                groups["trend"] = localize_trend_status(groups["trend"], normalized_language)
+            return _TREND_SIGNAL_TEMPLATES[key][normalized_language].format(**groups)
+
+    for localizer in (localize_macd_signal, localize_rsi_signal):
+        localized = localizer(raw_text, normalized_language)
+        if localized != raw_text:
+            return localized
+    return raw_text
+
+
+def localize_board_type(value: Any, language: Optional[str]) -> str:
+    """Translate a board classification such as 行业 or 概念."""
+    return _translate_exact(
+        value,
+        language,
+        canonical_map=_BOARD_TYPE_CANONICAL_MAP,
+        translations=_BOARD_TYPE_TRANSLATIONS,
+    )
+
+
+def localize_trend_analysis_payload(
+    payload: Any,
+    language: Optional[str],
+) -> Dict[str, Any]:
+    """Localize the trend-analysis block embedded in the analysis context."""
+    if not isinstance(payload, dict):
+        return payload
+    normalized_language = normalize_report_language(language)
+    if normalized_language == "zh":
+        return payload
+
+    localized = dict(payload)
+    if "trend_status" in localized:
+        localized["trend_status"] = localize_trend_status(localized["trend_status"], normalized_language)
+    if "ma_alignment" in localized:
+        localized["ma_alignment"] = localize_ma_alignment(localized["ma_alignment"], normalized_language)
+    if "volume_status" in localized:
+        localized["volume_status"] = localize_volume_status(localized["volume_status"], normalized_language)
+    if "volume_trend" in localized:
+        localized["volume_trend"] = localize_volume_trend(localized["volume_trend"], normalized_language)
+    if "buy_signal" in localized:
+        localized["buy_signal"] = localize_operation_advice(localized["buy_signal"], normalized_language)
+    for key in ("signal_reasons", "risk_factors"):
+        values = localized.get(key)
+        if isinstance(values, list):
+            localized[key] = [
+                localize_trend_signal_line(item, normalized_language) for item in values
+            ]
+    return localized
 
 
 def get_bias_status_emoji(value: Any) -> str:

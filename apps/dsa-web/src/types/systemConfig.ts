@@ -1,6 +1,7 @@
 export type SystemConfigCategory =
   | 'base'
   | 'data_source'
+  | 'search'
   | 'ai_model'
   | 'notification'
   | 'system'
@@ -88,7 +89,7 @@ export interface SystemConfigResponse {
 export interface SetupStatusCheck {
   key: string;
   title: string;
-  category: 'base' | 'ai_model' | 'agent' | 'notification' | 'system';
+  category: 'base' | 'ai_model' | 'agent' | 'notification' | 'system' | 'search';
   required: boolean;
   status: 'configured' | 'inherited' | 'optional' | 'needs_action';
   message: string;

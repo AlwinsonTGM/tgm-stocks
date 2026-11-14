@@ -89,3 +89,11 @@ export function getRuntimeInitialLanguage(): UiLanguage {
     navigatorLike: window.navigator,
   });
 }
+
+/**
+ * Language for non-React helpers that format user-facing text.
+ * Reads the persisted choice so it tracks the language switcher without a hook.
+ */
+export function getCurrentUiLanguage(): UiLanguage {
+  return getStoredUiLanguage(getUiLanguageStorage()) ?? getRuntimeInitialLanguage();
+}

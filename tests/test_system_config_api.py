@@ -212,6 +212,8 @@ class SystemConfigApiTestCase(unittest.TestCase):
         check_map = {check["key"]: check for check in payload["checks"]}
         self.assertEqual(check_map["llm_primary"]["status"], "configured")
         self.assertEqual(check_map["llm_agent"]["status"], "inherited")
+        self.assertEqual(check_map["news_search"]["category"], "search")
+        self.assertEqual(check_map["news_search"]["status"], "optional")
 
     def test_get_generation_backend_status_uses_saved_config_only(self) -> None:
         self._rewrite_env(

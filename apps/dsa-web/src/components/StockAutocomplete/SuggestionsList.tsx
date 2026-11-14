@@ -6,6 +6,8 @@ import type { CSSProperties } from 'react';
 import type { StockSuggestion } from '../../types/stockIndex';
 import { Badge } from '../common';
 import { cn } from '../../utils/cn';
+import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import type { UiLanguage } from '../../i18n/uiText';
 
 export interface SuggestionsListProps {
   /** Suggestion list */
@@ -27,6 +29,8 @@ export function SuggestionsList({
   onMouseEnter,
   style,
 }: SuggestionsListProps) {
+  const { language } = useUiLanguage();
+
   if (suggestions.length === 0) {
     return null;
   }
@@ -57,7 +61,7 @@ export function SuggestionsList({
           onMouseEnter={() => onMouseEnter(index)}
         >
           <div className="flex items-center gap-3">
-            <MarketBadge market={suggestion.market} />
+            <MarketBadge market={suggestion.market} language={language} />
 
             <div className="flex flex-col">
               <span className="text-sm font-medium text-primary-text">
@@ -69,7 +73,7 @@ export function SuggestionsList({
             </div>
           </div>
 
-          <MatchTypeBadge matchType={suggestion.matchType} />
+          <MatchTypeBadge matchType={suggestion.matchType} language={language} />
         </li>
       ))}
     </ul>
@@ -77,17 +81,17 @@ export function SuggestionsList({
 }
 
 const MARKET_BADGE_CONFIG = {
-  CN: { label: 'A股', className: 'border-danger/25 bg-danger/10 text-danger' },
-  HK: { label: '港股', className: 'border-success/25 bg-success/10 text-success' },
-  US: { label: '美股', className: 'border-cyan/25 bg-cyan/10 text-cyan' },
-  JP: { label: '日股', className: 'border-indigo-500/25 bg-indigo-500/10 text-indigo-500' },
-  KR: { label: '韩股', className: 'border-rose-500/25 bg-rose-500/10 text-rose-500' },
-  INDEX: { label: '指数', className: 'border-purple/25 bg-purple/10 text-purple' },
-  ETF: { label: 'ETF', className: 'border-warning/25 bg-warning/10 text-warning' },
-  BSE: { label: '北交所', className: 'border-orange-500/25 bg-orange-500/10 text-orange-500' },
+  CN: { label: ['A股', 'A-shares'], className: 'border-danger/25 bg-danger/10 text-danger' },
+  HK: { label: ['港股', 'HK'], className: 'border-success/25 bg-success/10 text-success' },
+  US: { label: ['美股', 'US'], className: 'border-cyan/25 bg-cyan/10 text-cyan' },
+  JP: { label: ['日股', 'JP'], className: 'border-indigo-500/25 bg-indigo-500/10 text-indigo-500' },
+  KR: { label: ['韩股', 'KR'], className: 'border-rose-500/25 bg-rose-500/10 text-rose-500' },
+  INDEX: { label: ['指数', 'Index'], className: 'border-purple/25 bg-purple/10 text-purple' },
+  ETF: { label: ['ETF', 'ETF'], className: 'border-warning/25 bg-warning/10 text-warning' },
+  BSE: { label: ['北交所', 'BSE'], className: 'border-orange-500/25 bg-orange-500/10 text-orange-500' },
 } as const;
 
-function MarketBadge({ market }: { market: string }) {
+function MarketBadge({ market, language }: { market: string; language: UiLanguage }) {
   const config = MARKET_BADGE_CONFIG[market as keyof typeof MARKET_BADGE_CONFIG];
 
   if (!config) {
@@ -96,24 +100,24 @@ function MarketBadge({ market }: { market: string }) {
 
   return (
     <Badge variant="default" size="sm" className={cn('min-w-[3rem] justify-center shadow-none', config.className)}>
-      {config.label}
+      {language === 'en' ? config.label[1] : config.label[0]}
     </Badge>
   );
 }
 
-function MatchTypeBadge({ matchType }: { matchType: string }) {
+function MatchTypeBadge({ matchType, language }: { matchType: string; language: UiLanguage }) {
   const configMap = {
-    exact: { label: '精确', className: 'border-cyan/25 bg-cyan/10 text-cyan' },
-    prefix: { label: '前缀', className: 'border-purple/25 bg-purple/10 text-purple' },
-    contains: { label: '包含', className: 'border-warning/25 bg-warning/10 text-warning' },
-    fuzzy: { label: '模糊', className: 'border-border/55 bg-elevated/75 text-muted-text' },
+    exact: { label: ['精确', 'Exact'], className: 'border-cyan/25 bg-cyan/10 text-cyan' },
+    prefix: { label: ['前缀', 'Prefix'], className: 'border-purple/25 bg-purple/10 text-purple' },
+    contains: { label: ['包含', 'Contains'], className: 'border-warning/25 bg-warning/10 text-warning' },
+    fuzzy: { label: ['模糊', 'Fuzzy'], className: 'border-border/55 bg-elevated/75 text-muted-text' },
   };
 
   const config = configMap[matchType as keyof typeof configMap] || configMap.fuzzy;
 
   return (
     <Badge variant="default" size="sm" className={cn('shrink-0 shadow-none', config.className)}>
-      {config.label}
+      {language === 'en' ? config.label[1] : config.label[0]}
     </Badge>
   );
 }

@@ -585,6 +585,34 @@ class TestEnvExampleWebSettingsCoverage(unittest.TestCase):
         )
 
 
+class TestSearxngTimeoutFieldRegistered(unittest.TestCase):
+    """SEARXNG_TIMEOUT_SECONDS is editable from the Web search settings page.
+
+    It used to be hidden as an operations-only key, which left the documented
+    "raise the timeout for slow instances" advice unreachable for Web users.
+    """
+
+    def test_searxng_timeout_is_visible_integer_field(self) -> None:
+        field = get_field_definition("SEARXNG_TIMEOUT_SECONDS")
+
+        self.assertEqual(field["category"], "search")
+        self.assertEqual(field["data_type"], "integer")
+        self.assertEqual(field["ui_control"], "text")
+        self.assertFalse(field["is_sensitive"])
+        self.assertEqual(field["default_value"], "10")
+        self.assertEqual(field["help_key"], "settings.data_source.SEARXNG_TIMEOUT_SECONDS")
+        self.assertTrue(field["examples"])
+        self.assertTrue(field["docs"])
+        self.assertNotIn("SEARXNG_TIMEOUT_SECONDS", WEB_SETTINGS_HIDDEN_FROM_UI)
+
+    def test_schema_response_includes_searxng_timeout(self) -> None:
+        schema = build_schema_response()
+        search = next(category for category in schema["categories"] if category["category"] == "search")
+        field_keys = {field["key"] for field in search["fields"]}
+
+        self.assertIn("SEARXNG_TIMEOUT_SECONDS", field_keys)
+
+
 class TestSettingsHelpContract(unittest.TestCase):
     """Help keys must map to registry metadata or be editor-only.
 

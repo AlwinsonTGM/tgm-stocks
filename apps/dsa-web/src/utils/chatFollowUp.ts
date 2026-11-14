@@ -3,6 +3,9 @@ import { historyApi } from '../api/history';
 import { looksLikeStockCode, validateStockCode } from './validation';
 import { normalizeStockCode, resolveRegisteredIndexCanonical } from './stockCode';
 import type { RegisteredIndexIdentity } from './stockCode';
+import { getCurrentUiLanguage } from './uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 export interface ChatFollowUpContext {
   stock_code: string;
@@ -107,7 +110,7 @@ export function parseFollowUpRecordId(recordId: string | null): number | undefin
 
 export function buildFollowUpPrompt(stockCode: string, stockName: string | null): string {
   const displayName = stockName ? `${stockName}(${stockCode})` : stockCode;
-  return `请深入分析 ${displayName}`;
+  return pick(`请深入分析 ${displayName}`, `Analyze ${displayName} in depth`);
 }
 
 function reportIdentityKey(code: string, index: ReadonlyArray<RegisteredIndexIdentity>, type?: 'stock' | 'index'): string | null {

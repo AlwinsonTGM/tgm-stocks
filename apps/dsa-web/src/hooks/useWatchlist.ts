@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { systemConfigApi } from '../api/systemConfig';
 import { findMatchingStockCode, includesStockCode } from '../utils/stockCode';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 export interface UseWatchlistReturn {
   watchlistCodes: string[];
@@ -76,10 +79,10 @@ export function useWatchlist(): UseWatchlistReturn {
       const result = await systemConfigApi.addToWatchlist(stockCode);
       if (mountedRef.current) {
         setCodes(result);
-        showMessage(`已加入自选 ${stockCode}`);
+        showMessage(pick(`已加入自选 ${stockCode}`, `Added ${stockCode} to the watchlist`));
       }
     } catch {
-      if (mountedRef.current) showMessage('操作失败');
+      if (mountedRef.current) showMessage(pick('操作失败', 'Action failed'));
     } finally {
       if (mountedRef.current) setIsActioning(false);
     }
@@ -92,10 +95,10 @@ export function useWatchlist(): UseWatchlistReturn {
       const result = await systemConfigApi.removeFromWatchlist(stockCode);
       if (mountedRef.current) {
         setCodes(result);
-        showMessage(`已从自选移除 ${stockCode}`);
+        showMessage(pick(`已从自选移除 ${stockCode}`, `Removed ${stockCode} from the watchlist`));
       }
     } catch {
-      if (mountedRef.current) showMessage('操作失败');
+      if (mountedRef.current) showMessage(pick('操作失败', 'Action failed'));
     } finally {
       if (mountedRef.current) setIsActioning(false);
     }

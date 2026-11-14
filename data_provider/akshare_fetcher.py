@@ -355,7 +355,15 @@ def _akshare_call_with_timeout(
         daemon=True,
     )
 
-    process.start()
+    try:
+        process.start()
+    except (OSError, ValueError, NotImplementedError, RuntimeError):
+        # Android's embedded Python cannot spawn processes, so the deadline cannot be
+        # enforced. Run inline rather than losing the data source entirely.
+        parent_conn.close()
+        child_conn.close()
+        return func(*args, **kwargs)
+
     child_conn.close()
 
     try:

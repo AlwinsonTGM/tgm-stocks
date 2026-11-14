@@ -1,4 +1,7 @@
 import apiClient from './index';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 export type ExtractItem = {
   code?: string | null;
@@ -49,6 +52,6 @@ export const stocksApi = {
       const data = response.data as { codes?: string[]; items?: ExtractItem[] };
       return { codes: data.codes ?? [], items: data.items };
     }
-    throw new Error('请提供文件或粘贴文本');
+    throw new Error(pick('请提供文件或粘贴文本', 'Provide a file or paste some text'));
   },
 };

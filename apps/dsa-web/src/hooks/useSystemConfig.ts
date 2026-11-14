@@ -8,6 +8,7 @@ import type {
   SystemConfigUpdateItem,
 } from '../types/systemConfig';
 import { serializeStockListValue } from '../utils/stockList';
+import { useUiLanguage } from '../contexts/UiLanguageContext';
 
 type ToastState = {
   type: 'success';
@@ -29,6 +30,7 @@ const CATEGORY_DISPLAY_ORDER: Record<string, number> = {
   base: 10,
   ai_model: 20,
   data_source: 30,
+  search: 35,
   notification: 40,
   system: 50,
   agent: 55,
@@ -296,18 +298,24 @@ export function useSystemConfig() {
       });
   }, [dirtyKeys, draftValues, serverItemByKey]);
 
+  const { language } = useUiLanguage();
+  const L = useCallback(
+    (zh: string, en: string) => (language === 'en' ? en : zh),
+    [language],
+  );
+
   const save = useCallback(async (changedItems?: SystemConfigUpdateItem[]): Promise<SaveResult> => {
     const explicitItems = changedItems ?? [];
     const resolvedChangedItems = explicitItems.length > 0 ? explicitItems : getChangedItems();
 
     if (!explicitItems.length && !hasDirty) {
-      setToast({ type: 'success', message: '当前没有可保存的修改。' });
-      return { success: true, message: '当前没有可保存的修改' };
+      setToast({ type: 'success', message: L('当前没有可保存的修改。', 'There are no changes to save.') });
+      return { success: true, message: L('当前没有可保存的修改', 'There are no changes to save') };
     }
 
     if (!resolvedChangedItems.length) {
-      setToast({ type: 'success', message: '当前没有可保存的修改。' });
-      return { success: true, message: '当前没有可保存的修改' };
+      setToast({ type: 'success', message: L('当前没有可保存的修改。', 'There are no changes to save.') });
+      return { success: true, message: L('当前没有可保存的修改', 'There are no changes to save') };
     }
 
     setIsSaving(true);
@@ -320,15 +328,18 @@ export function useSystemConfig() {
 
       if (!validateResult.valid) {
         setSaveError(createParsedApiError({
-          title: '配置校验未通过',
-          message: '请先修正表单错误后再保存。',
-          rawMessage: '配置校验未通过，请先修正表单错误。',
+          title: L('配置校验未通过', 'Configuration validation failed'),
+          message: L('请先修正表单错误后再保存。', 'Fix the form errors before saving.'),
+          rawMessage: L(
+            '配置校验未通过，请先修正表单错误。',
+            'Configuration validation failed. Fix the form errors before saving.',
+          ),
           category: 'http_error',
         }));
         setRetryAction('save');
         return {
           success: false,
-          message: '配置校验未通过',
+          message: L('配置校验未通过', 'Configuration validation failed'),
           issues: validateResult.issues,
         };
       }
@@ -345,9 +356,12 @@ export function useSystemConfig() {
       applyServerPayload(refreshed.items, refreshed.configVersion, refreshed.maskToken);
 
       const warningText = updateResult.warnings?.length
-        ? `；警告：${updateResult.warnings.join('；')}`
+        ? L(
+          `；警告：${updateResult.warnings.join('；')}`,
+          ` Warnings: ${updateResult.warnings.join('; ')}`,
+        )
         : '';
-      setToast({ type: 'success', message: `配置已更新${warningText}` });
+      setToast({ type: 'success', message: L(`配置已更新${warningText}`, `Configuration updated.${warningText}`) });
       return { success: true };
     } catch (error: unknown) {
       if (error instanceof SystemConfigValidationError) {
@@ -355,8 +369,8 @@ export function useSystemConfig() {
         setSaveError(error.parsedError);
       } else if (error instanceof SystemConfigConflictError) {
         setSaveError(createParsedApiError({
-          title: '配置版本冲突',
-          message: `${error.message}，请先重新加载配置。`,
+          title: L('配置版本冲突', 'Configuration version conflict'),
+          message: L(`${error.message}，请先重新加载配置。`, `${error.message} Reload the configuration first.`),
           rawMessage: error.parsedError.rawMessage,
           status: error.parsedError.status,
           category: error.parsedError.category,
@@ -367,11 +381,12 @@ export function useSystemConfig() {
 
       setToast({ type: 'error', error: getParsedApiError(error) });
       setRetryAction('save');
-      return { success: false, message: '保存失败' };
+      return { success: false, message: L('保存失败', 'Save failed') };
     } finally {
       setIsSaving(false);
     }
   }, [
+    L,
     applyServerPayload,
     configVersion,
     getChangedItems,

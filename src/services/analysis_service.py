@@ -127,6 +127,7 @@ class AnalysisService:
                     query_id=query_id,
                     stock_code=stock_code,
                     trigger_source=query_source or "api",
+                    report_language=report_language,
                 )
             
             # 获取配置
@@ -234,6 +235,7 @@ class AnalysisService:
             report_saved=True,
             query_id=query_id,
             stock_code=result.code,
+            report_language=report_language,
         )
         
         # 构建报告结构

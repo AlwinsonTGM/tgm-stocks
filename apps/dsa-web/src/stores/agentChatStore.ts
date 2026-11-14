@@ -9,6 +9,9 @@ import {
   type ParsedApiError,
 } from '../api/error';
 import { generateUUID } from '../utils/uuid';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 const STORAGE_KEY_SESSION = 'dsa_chat_session_id';
 
@@ -339,8 +342,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
     };
     const skillNames = meta?.skillNames?.length
       ? meta.skillNames
-      : [meta?.skillName ?? '通用'];
-    const skillName = skillNames.join('、');
+      : [meta?.skillName ?? pick('通用', 'General')];
+    const skillName = skillNames.join(pick('、', ', '));
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -373,8 +376,11 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       let acceptedEvent: StreamAcceptedEvent | null = null;
       const currentProgressSteps: ProgressStep[] = [];
       const protocolError = (message: string) => createParsedApiError({
-        title: '请求未被接受',
-        message: 'Agent 没有确认接收本次问题，请保留当前内容后重试。',
+        title: pick('请求未被接受', 'Request not accepted'),
+        message: pick(
+          'Agent 没有确认接收本次问题，请保留当前内容后重试。',
+          'The agent did not confirm it received this question. Keep your input and try again.',
+        ),
         rawMessage: message,
         category: 'upstream_network',
       });
@@ -429,7 +435,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           const failureEvent = event as unknown as StreamFailureEvent;
           throw getStreamFailureError(
             failureEvent,
-            '分析出错',
+            pick('分析出错', 'Analysis failed'),
           );
         }
         if (!acceptedEvent) {
@@ -445,7 +451,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           if (doneEvent.success === false) {
             throw getStreamFailureError(
               doneEvent,
-              '大模型调用出错，请检查 API Key 配置',
+              pick('大模型调用出错，请检查 API Key 配置', 'The model call failed. Check your API key configuration.'),
             );
           }
           finalContent = doneEvent.content ?? '';
@@ -490,8 +496,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
 
       if (!receivedDoneEvent && !ac.signal.aborted) {
         throw createParsedApiError({
-          title: '回复未完整返回',
-          message: 'Agent 流式响应在完成前中断，请重试。',
+          title: pick('回复未完整返回', 'Reply did not complete'),
+          message: pick('流式响应在完成前中断，请重试。', 'The streamed response stopped before finishing. Try again.'),
           rawMessage: 'Agent stream ended before a done event was received.',
           category: 'upstream_network',
         });
@@ -507,7 +513,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
             {
               id: (Date.now() + 1).toString(),
               role: 'assistant',
-              content: finalContent || '（无内容）',
+              content: finalContent || pick('（无内容）', '(no content)'),
               skills: payload.skills,
               skill: payload.skills?.[0],
               skillNames,

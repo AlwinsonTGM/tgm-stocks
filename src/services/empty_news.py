@@ -23,10 +23,14 @@ from typing import Any, Optional, Tuple
 
 from src.report_language import SUPPORTED_REPORT_LANGUAGES
 
-_ZH_NOT_CONFIGURED = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+_ZH_NOT_CONFIGURED = (
+    "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
+    "可在「设置 → 搜索服务」中配置 Tavily、Brave 或自建 SearXNG。"
+)
 _EN_NOT_CONFIGURED = (
     "⚠️ No news search channel is configured; "
-    "this analysis does not incorporate news-based evidence."
+    "this analysis does not incorporate news-based evidence. "
+    "Add a Tavily, Brave, or SearXNG provider under Settings → Search."
 )
 _ZH_ZERO_RESULTS = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
 _EN_ZERO_RESULTS = (
@@ -35,7 +39,8 @@ _EN_ZERO_RESULTS = (
 )
 _KO_NOT_CONFIGURED = (
     "⚠️ 뉴스 검색 채널이 설정되지 않아 이번 분석에는 "
-    "뉴스 근거를 반영하지 않았습니다."
+    "뉴스 근거를 반영하지 않았습니다. "
+    "설정 → 검색에서 Tavily, Brave 또는 SearXNG를 구성하세요."
 )
 _KO_ZERO_RESULTS = (
     "⚠️ 이번 분석에서 사용 가능한 뉴스 데이터를 가져오지 못해 "

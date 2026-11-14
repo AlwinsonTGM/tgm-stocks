@@ -567,18 +567,24 @@ class HistoryService:
         if not record:
             return None
 
+        raw_result = self._parse_diagnostic_json_field(
+            getattr(record, "raw_result", None),
+            "raw_result",
+        )
         return build_run_diagnostic_summary(
             context_snapshot=self._parse_diagnostic_json_field(
                 getattr(record, "context_snapshot", None),
                 "context_snapshot",
             ),
-            raw_result=self._parse_diagnostic_json_field(
-                getattr(record, "raw_result", None),
-                "raw_result",
-            ),
+            raw_result=raw_result,
             report_saved=True,
             query_id=getattr(record, "query_id", None),
             stock_code=getattr(record, "code", None),
+            report_language=(
+                raw_result.get("report_language")
+                if isinstance(raw_result, dict)
+                else None
+            ),
         )
 
     def resolve_and_get_run_flow(

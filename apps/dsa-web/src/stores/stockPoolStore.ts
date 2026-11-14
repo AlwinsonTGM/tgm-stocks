@@ -7,6 +7,9 @@ import type { AnalysisReport, HistoryItem, HistoryListResponse, ReportLanguage, 
 import { getRecentStartDate, getTodayInShanghai } from '../utils/format';
 import { toAssetAwareCodeKey, type AssetAwareAssetType } from '../utils/stockCode';
 import { isObviouslyInvalidStockQuery, looksLikeStockCode, validateStockCode } from '../utils/validation';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 const PAGE_SIZE = 20;
 const STOCK_HISTORY_PAGE_SIZE = 20;
@@ -895,12 +898,12 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
     const skills = options?.skills;
 
     if (!stockCodeInput) {
-      set({ inputError: '请输入股票代码', duplicateError: null });
+      set({ inputError: pick('请输入股票代码', 'Enter a stock code'), duplicateError: null });
       return;
     }
 
     if (selectionSource !== 'autocomplete' && isObviouslyInvalidStockQuery(stockCodeInput)) {
-      set({ inputError: '请输入有效的股票代码或股票名称', duplicateError: null });
+      set({ inputError: pick('请输入有效的股票代码或股票名称', 'Enter a valid stock code or name'), duplicateError: null });
       return;
     }
 
@@ -950,7 +953,7 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
 
       if (error instanceof DuplicateTaskError) {
         set({
-          duplicateError: `股票 ${error.stockCode} 正在分析中，请等待完成`,
+          duplicateError: pick(`股票 ${error.stockCode} 正在分析中，请等待完成`, `${error.stockCode} is already being analyzed. Wait for it to finish.`),
         });
         return;
       }
@@ -989,7 +992,7 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
 
   syncTaskFailed: (task) => {
     get().syncTaskUpdated(task);
-    set({ error: getParsedApiError(task.error || '分析失败') });
+    set({ error: getParsedApiError(task.error || pick('分析失败', 'Analysis failed')) });
   },
 
   refreshActiveTasks: async () => {

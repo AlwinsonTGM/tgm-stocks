@@ -225,9 +225,9 @@ describe('GenerationBackendStatusPanel', () => {
     render(<GenerationBackendStatusPanel
       items={[{ key: 'LLM_MODELFLARE_API_KEY', value: '' }]} maskToken="******"
     />);
-    expect(await screen.findByText('配置需要调整')).toBeInTheDocument();
-    expect(screen.getByText(/LLM_MODELFLARE_API_KEY：请填写此渠道的 API Key/)).toBeInTheDocument();
-    expect(screen.queryByText('请求失败')).not.toBeInTheDocument();
+    expect(await screen.findByText('Settings need attention')).toBeInTheDocument();
+    expect(screen.getByText(/LLM_MODELFLARE_API_KEY: Enter an API key for this channel\./)).toBeInTheDocument();
+    expect(screen.queryByText('Request failed')).not.toBeInTheDocument();
     expect(screen.queryByText('codex_cli')).not.toBeInTheDocument();
     expect(testGenerationBackend).not.toHaveBeenCalled();
   });

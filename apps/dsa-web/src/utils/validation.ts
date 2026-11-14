@@ -1,3 +1,7 @@
+import { getCurrentUiLanguage } from './uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
+
 interface ValidationResult {
   valid: boolean;
   message?: string;
@@ -35,14 +39,14 @@ export const validateStockCode = (value: string): ValidationResult => {
   const normalized = value.trim().toUpperCase();
 
   if (!normalized) {
-    return { valid: false, message: '请输入股票代码', normalized };
+    return { valid: false, message: pick('请输入股票代码', 'Enter a stock code'), normalized };
   }
 
   const valid = looksLikeStockCode(normalized);
 
   return {
     valid,
-    message: valid ? undefined : '股票代码格式不正确',
+    message: valid ? undefined : pick('股票代码格式不正确', 'Stock code format is invalid'),
     normalized,
   };
 };

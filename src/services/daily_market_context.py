@@ -444,6 +444,7 @@ class DailyMarketContextService:
                 stock_code=MARKET_REVIEW_HISTORY_CODE,
                 trigger_source="daily_market_context",
                 scope="daily_market_context",
+                report_language=getattr(config, "report_language", None),
             )
             result = run_market_review(
                 config=config,

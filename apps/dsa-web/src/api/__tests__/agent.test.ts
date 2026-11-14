@@ -143,6 +143,6 @@ describe('agentApi', () => {
     } } });
     expect(parsed.code).toBe('session_state_conflict');
     expect(parsed.status).toBe(409);
-    expect(parsed.message).toContain('刷新');
+    expect(parsed.message).toContain('Refresh the session');
   });
 });

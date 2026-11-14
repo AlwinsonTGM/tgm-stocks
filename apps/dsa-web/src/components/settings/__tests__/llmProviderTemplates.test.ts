@@ -53,12 +53,12 @@ describe('llmProviderTemplates', () => {
       placeholderModels: 'gpt-6.1-sol',
       capabilities: ['openai-compatible', 'aggregator', 'model-discovery'],
       officialSources: [
-        { label: 'Modelflare 专属注册', url: 'https://modelflare.dev/sign-up?utm_source=daily_stock_analysis&utm_campaign=app' },
+        { label: 'Modelflare sign-up', url: 'https://modelflare.dev/sign-up?utm_source=daily_stock_analysis&utm_campaign=app' },
         { label: 'Modelflare Docs', url: 'https://docs.modelflare.dev/' },
         { label: 'Modelflare Models & Pricing', url: 'https://modelflare.dev/pricing' },
       ],
     });
-    expect(LLM_PROVIDER_TEMPLATE_BY_ID.modelflare.configHint).toContain('路由分组');
+    expect(LLM_PROVIDER_TEMPLATE_BY_ID.modelflare.configHint).toContain('routing group');
   });
 
   it('keeps the Anspire LLM preset available without promotional labeling', () => {
@@ -110,20 +110,20 @@ describe('llmProviderTemplates', () => {
 
   it('uses volcengine as the default Volcengine Ark provider id', () => {
     expect(LLM_PROVIDER_TEMPLATE_BY_ID.volcengine).toMatchObject({
-      label: '火山方舟（豆包）',
+      label: 'Volcengine Ark (Doubao)',
       protocol: 'openai',
       baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       placeholderModels: 'doubao-seed-1-6-251015,doubao-seed-1-6-thinking-251015',
-      configHint: '确认在线推理 endpoint / region 与 Coding Plan 专用入口不要混用。',
+      configHint: 'Do not mix the online inference endpoint or region with the Coding Plan dedicated endpoint.',
     });
     expect(LLM_PROVIDER_TEMPLATE_BY_ID.ark).toBeUndefined();
   });
 
   it('keeps focused config hints on providers with common setup pitfalls', () => {
-    expect(LLM_PROVIDER_TEMPLATE_BY_ID.ollama.configHint).toContain('Ollama 服务');
-    expect(LLM_PROVIDER_TEMPLATE_BY_ID.siliconflow.configHint).toContain('API Key');
-    expect(LLM_PROVIDER_TEMPLATE_BY_ID.openrouter.configHint).toContain('API Key');
-    expect(LLM_PROVIDER_TEMPLATE_BY_ID.requesty.configHint).toContain('API Key');
+    expect(LLM_PROVIDER_TEMPLATE_BY_ID.ollama.configHint).toContain('Ollama service');
+    expect(LLM_PROVIDER_TEMPLATE_BY_ID.siliconflow.configHint).toContain('API key');
+    expect(LLM_PROVIDER_TEMPLATE_BY_ID.openrouter.configHint).toContain('API key');
+    expect(LLM_PROVIDER_TEMPLATE_BY_ID.requesty.configHint).toContain('API key');
     expect(LLM_PROVIDER_TEMPLATE_BY_ID.openai.configHint).toBeUndefined();
   });
 

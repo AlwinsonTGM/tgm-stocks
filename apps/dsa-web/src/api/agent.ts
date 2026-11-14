@@ -3,6 +3,9 @@ import { API_BASE_URL } from '../utils/constants';
 import { createApiError, createParsedApiError, isApiRequestError, parseApiError } from './error';
 import { toCamelCase } from './utils';
 import type { AgentBackendStatusResponse } from '../types/systemConfig';
+import { getCurrentUiLanguage } from '../utils/uiLanguage';
+
+const pick = (zh: string, en: string): string => (getCurrentUiLanguage() === 'en' ? en : zh);
 
 export interface ChatStreamOptions {
   signal?: AbortSignal;
@@ -56,7 +59,11 @@ function record(value: unknown): value is Record<string, unknown> {
 
 export function decodeChatState(payload: unknown, source: 'detail' | 'accepted' | 'response'): DecodedChatState {
   const invalid = () => createParsedApiError({
-    title: '会话状态响应不完整', message: '请刷新会话后重试；本次响应不能确认讨论对象。',
+    title: pick('会话状态响应不完整', 'Incomplete session state response'),
+    message: pick(
+      '请刷新会话后重试；本次响应不能确认讨论对象。',
+      'Refresh the session and try again. This response could not confirm what is being discussed.',
+    ),
     code: 'chat_state_protocol_error', category: 'http_error',
   });
   if (!record(payload)) throw invalid();
@@ -176,7 +183,7 @@ export const agentApi = {
     }>('/api/v1/agent/chat/send', { content });
     const data = response.data;
     if (data.success === false) {
-      throw new Error(data.message || '发送失败');
+      throw new Error(data.message || pick('发送失败', 'Send failed'));
     }
     return { success: true };
   },

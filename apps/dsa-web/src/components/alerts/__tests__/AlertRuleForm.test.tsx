@@ -180,7 +180,7 @@ describe('AlertRuleForm', () => {
     fireEvent.change(screen.getByLabelText('价格阈值'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: '创建规则' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('股票代码格式不正确');
+    expect(screen.getByRole('alert')).toHaveTextContent('Stock code format is invalid');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

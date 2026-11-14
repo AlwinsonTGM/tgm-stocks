@@ -46,15 +46,18 @@ export const getRecentStartDate = (days: number): string => {
  * Returns today's date as YYYY-MM-DD in Asia/Shanghai timezone.
  * Use this instead of the browser-local date for market-day UI semantics.
  */
+import { getCurrentUiLanguage } from './uiLanguage';
+
 export const getTodayInShanghai = (): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
 
 export const formatReportType = (value?: string): string => {
   if (!value) return '—';
-  if (value === 'simple') return '普通';
-  if (value === 'detailed') return '标准';
-  if (value === 'full') return '完整';
-  if (value === 'brief') return '简版';
-  if (value === 'market_review') return '大盘';
+  const en = getCurrentUiLanguage() === 'en';
+  if (value === 'simple') return en ? 'Simple' : '普通';
+  if (value === 'detailed') return en ? 'Standard' : '标准';
+  if (value === 'full') return en ? 'Full' : '完整';
+  if (value === 'brief') return en ? 'Brief' : '简版';
+  if (value === 'market_review') return en ? 'Market review' : '大盘';
   return value;
 };

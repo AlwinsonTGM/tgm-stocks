@@ -186,6 +186,9 @@ class TestEnhanceContextRealtimeOverride(unittest.TestCase):
             from src.config import Config
             Config._instance = None
             self.config = Config._load_from_env()
+        # _enhance_context localizes ma_status, so pin the language instead of
+        # inheriting whatever REPORT_LANGUAGE the ambient .env happens to set.
+        self.config.report_language = "zh"
         self.pipeline = StockAnalysisPipeline(config=self.config)
 
     @patch("src.core.pipeline.get_market_now")

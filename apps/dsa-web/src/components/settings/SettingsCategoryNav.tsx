@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Bell, Bot, Database, Layers3, LineChart, Settings2, SlidersHorizontal } from 'lucide-react';
+import { Bell, Bot, Database, Layers3, LineChart, Search, Settings2, SlidersHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '../common';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
@@ -18,6 +18,7 @@ const categoryIconMap: Partial<Record<SystemConfigCategory, LucideIcon>> = {
   system: Settings2,
   base: SlidersHorizontal,
   data_source: Database,
+  search: Search,
   ai_model: Layers3,
   notification: Bell,
   agent: Bot,
@@ -42,7 +43,7 @@ export const SettingsCategoryNav: React.FC<SettingsCategoryNavProps> = ({
         <p className="mt-1 text-[11px] leading-relaxed text-muted-text">{t('settings.categoryNavDescription')}</p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:block lg:space-y-1.5">
         {categories.map((category) => {
           const isActive = category.category === activeCategory;
           const count = (itemsByCategory[category.category] || []).length;
@@ -55,7 +56,7 @@ export const SettingsCategoryNav: React.FC<SettingsCategoryNavProps> = ({
               key={category.category}
               type="button"
               className={cn(
-                'flex min-w-[9rem] items-center gap-2 rounded-md border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-200 lg:min-w-0 lg:w-full lg:items-start lg:gap-3 lg:px-3 lg:py-3',
+                'flex min-h-11 min-w-0 items-center gap-2 rounded-md border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-200 lg:w-full lg:items-start lg:gap-3 lg:px-3 lg:py-3',
                 isActive
                   ? 'settings-nav-item-active'
                   : 'border-transparent bg-transparent hover:border-[var(--settings-border)] hover:bg-[var(--settings-surface-hover)]',
@@ -68,7 +69,7 @@ export const SettingsCategoryNav: React.FC<SettingsCategoryNavProps> = ({
                 aria-hidden="true"
               />
               <span className="min-w-0 flex-1">
-                <span className={cn('block truncate text-sm font-medium', isActive ? 'text-foreground' : 'text-secondary-text')}>
+                <span className={cn('block text-sm font-medium leading-snug', isActive ? 'text-foreground' : 'text-secondary-text')}>
                   {title}
                 </span>
                 {description ? (

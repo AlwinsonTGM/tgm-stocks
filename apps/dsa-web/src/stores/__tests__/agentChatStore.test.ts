@@ -380,7 +380,7 @@ describe('agentChatStore.startStream', () => {
     await useAgentChatStore.getState().startStream({ message: '风险呢', skills: [], request_id: 'conflict-request' });
     const state = useAgentChatStore.getState();
     expect(state.chatError).toMatchObject({ code: 'session_state_conflict' });
-    expect(state.chatError?.message).toContain('刷新');
+    expect(state.chatError?.message).toContain('Refresh the session');
     expect(state.messages).toEqual([]);
     expect(state.selectedSkillIds).toEqual(['risk']);
     expect(state.loading).toBe(false);
@@ -626,7 +626,7 @@ describe('agentChatStore.startStream', () => {
     const state = useAgentChatStore.getState();
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '请求未被接受',
+      title: 'Request not accepted',
       rawMessage: 'Agent stream emitted accepted more than once.',
     });
   });
@@ -648,7 +648,7 @@ describe('agentChatStore.startStream', () => {
     expect(state.messages).toEqual([]);
     expect(state.sessions).toEqual([]);
     expect(state.chatError).toMatchObject({
-      title: '请求未被接受',
+      title: 'Request not accepted',
       rawMessage: 'Agent stream emitted done before accepted.',
     });
   });
@@ -678,7 +678,7 @@ describe('agentChatStore.startStream', () => {
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
       skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillName: '趋势分析, 均线金叉',
     });
     expect(state.messages[1]).toMatchObject({
       role: 'assistant',
@@ -686,7 +686,7 @@ describe('agentChatStore.startStream', () => {
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
       skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillName: '趋势分析, 均线金叉',
     });
   });
 
@@ -707,8 +707,8 @@ describe('agentChatStore.startStream', () => {
     const state = useAgentChatStore.getState();
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '回复未完整返回',
-      message: 'Agent 流式响应在完成前中断，请重试。',
+      title: 'Reply did not complete',
+      message: 'The streamed response stopped before finishing. Try again.',
       category: 'upstream_network',
     });
   });
@@ -728,7 +728,7 @@ describe('agentChatStore.startStream', () => {
     });
 
     expect(useAgentChatStore.getState().chatError).toMatchObject({
-      title: '系统没有配置可用的 LLM 模型',
+      title: 'No LLM model is configured',
       category: 'llm_not_configured',
       rawMessage: 'Agent LLM: no effective primary model configured',
     });
@@ -749,7 +749,7 @@ describe('agentChatStore.startStream', () => {
     });
 
     expect(useAgentChatStore.getState().chatError).toMatchObject({
-      title: '连接上游服务超时',
+      title: 'Upstream service timed out',
       category: 'upstream_timeout',
       rawMessage: 'connect timeout while calling upstream provider',
     });
