@@ -69,6 +69,7 @@ from src.core.config_registry import (
     get_category_definitions,
     get_field_definition,
     get_registered_field_keys,
+    get_schema_hidden_keys,
 )
 from src.llm.errors import call_litellm_with_param_recovery
 from src.llm.backend_registry import (
@@ -483,6 +484,13 @@ class SystemConfigService:
         all_keys = set(config_map.keys()) | registered_keys
         if include_schema:
             all_keys = self._get_schema_config_keys(config_map, registered_keys)
+        # Keys the platform cannot honour are omitted from the config payload as
+        # well as the schema. The Web UI renders some panels from config items
+        # rather than the schema, so hiding only the schema left those panels
+        # visible on Android (found by the device release gate).
+        hidden_keys = get_schema_hidden_keys()
+        if hidden_keys:
+            all_keys = {key for key in all_keys if key.upper() not in hidden_keys}
 
         category_orders = {
             item["category"]: item["display_order"]

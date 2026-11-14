@@ -1037,6 +1037,21 @@ class AndroidFeatureProfileApiTestCase(unittest.TestCase):
         self.assertFalse(keys & _ANDROID_HIDDEN_KEYS)
         self.assertIn(_ALWAYS_AVAILABLE_KEY, keys)
 
+    def test_android_profile_omits_hidden_keys_from_config_items(self) -> None:
+        """The Web UI renders some panels from config items, not the schema.
+
+        Hiding only the schema left the scheduler panel visible on Android, which
+        the device release gate caught. The config payload must omit them too.
+        """
+        with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
+            payload = system_config.get_system_config(
+                include_schema=True, service=self.service
+            ).model_dump(by_alias=True)
+
+        keys = {item["key"] for item in payload["items"]}
+        self.assertFalse(keys & _ANDROID_HIDDEN_KEYS)
+        self.assertIn(_ALWAYS_AVAILABLE_KEY, keys)
+
     def test_android_profile_rejects_enabling_scheduled_execution(self) -> None:
         with patch.dict(os.environ, {ANDROID_PLATFORM_ENV: ANDROID_PLATFORM_VALUE}):
             with self.assertRaises(HTTPException) as context:
