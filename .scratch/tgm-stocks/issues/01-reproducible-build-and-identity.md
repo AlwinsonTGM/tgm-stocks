@@ -4,12 +4,14 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A clean clone plus one documented command produces an APK on a machine with only a JDK and the Android SDK
-- [ ] The APK reports app name TGM Stocks, package `io.github.alwinsontgm.stocks`, a non-empty version name and a version code of at least 1
-- [ ] The icon appears at mdpi through xxxhdpi and as an adaptive icon
-- [ ] `minSdk 24`, `targetSdk 36`, `arm64-v8a` only
-- [ ] No absolute host paths and no references to directories outside the repository
-- [ ] `LICENSE` retained and `NOTICE` credits upstream
-- [ ] History split into Android port, i18n/diagnostics, and docs commits
+- [x] A clean clone plus one documented command produces an APK on a machine with only a JDK and the Android SDK
+- [x] The APK reports app name TGM Stocks, package `io.github.alwinsontgm.stocks`, a non-empty version name and a version code of at least 1
+- [x] The icon appears at mdpi through xxxhdpi and as an adaptive icon
+- [x] `minSdk 24`, `targetSdk 36`, `arm64-v8a` only
+- [x] No absolute host paths and no references to directories outside the repository
+- [x] `LICENSE` retained and `NOTICE` credits upstream
+- [x] History split into Android port, i18n/diagnostics, and docs commits
+
+**Evidence:** a clean clone of branch `tgm-stocks` built with `android/build-apk.ps1` in 7m29s, producing a 162.9 MiB APK; `aapt2 dump badging` reports package `io.github.alwinsontgm.stocks`, versionName `1.0.0`, versionCode `1`, label `TGM Stocks`, minSdk `24`, targetSdk `36`, native-code `arm64-v8a`; the archive has 0.2 MiB of padding and no `.env` or database entries. History is three commits on top of upstream: Android port, i18n/diagnostics, docs.
