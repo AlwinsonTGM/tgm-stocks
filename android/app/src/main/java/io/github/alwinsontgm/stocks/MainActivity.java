@@ -112,7 +112,11 @@ public class MainActivity extends Activity {
                         v.setPadding(0, top, 0, 0);
                         return insets;
                     });
-                    WebView.setWebContentsDebuggingEnabled(true);
+                    // Debugging the WebView exposes the authenticated session to adb.
+                    // Keep it for debug builds only; release builds must not be inspectable.
+                    boolean debuggable =
+                        (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+                    WebView.setWebContentsDebuggingEnabled(debuggable);
                     WebView view = new WebView(this);
                     view.getSettings().setJavaScriptEnabled(true);
                     view.getSettings().setDomStorageEnabled(true);
