@@ -1,10 +1,13 @@
 package io.github.alwinsontgm.stocks;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.CookieManager;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -35,6 +38,9 @@ public class MainActivity extends Activity {
     // leaves out the scheduler and image-notification settings (ADR-0006).
     private static final String PLATFORM_ENV = "TGMS_PLATFORM";
     private static final String ANDROID_PLATFORM = "android";
+    // Request code for the WebView file chooser (Settings' "Import .env").
+    private static final int FILE_CHOOSER_REQUEST = 2;
+    private ValueCallback<Uri[]> pendingFileCallback;
 
     private String loopbackToken() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -128,6 +134,28 @@ public class MainActivity extends Activity {
                             return !("http".equals(uri.getScheme()) && "127.0.0.1".equals(uri.getHost()) && uri.getPort() == port);
                         }
                     });
+                    // Without this, every <input type="file"> in the Web UI is a dead
+                    // button: Settings' "Import .env" and the smart-import pickers do
+                    // nothing because the WebView never asks the app for a chooser.
+                    view.setWebChromeClient(new WebChromeClient() {
+                        @Override public boolean onShowFileChooser(
+                            WebView webView,
+                            ValueCallback<Uri[]> callback,
+                            FileChooserParams params
+                        ) {
+                            if (pendingFileCallback != null) {
+                                pendingFileCallback.onReceiveValue(null);
+                            }
+                            pendingFileCallback = callback;
+                            try {
+                                startActivityForResult(params.createIntent(), FILE_CHOOSER_REQUEST);
+                                return true;
+                            } catch (Exception error) {
+                                pendingFileCallback = null;
+                                return false;
+                            }
+                        }
+                    });
                     content.addView(view, new LinearLayout.LayoutParams(-1, 0, 1));
                     setContentView(content);
                     // A cookie rather than a request header: loadUrl(url, headers)
@@ -144,5 +172,28 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> loading.setText("Experimental stock API failed to start. Check Android logs; no stock analysis ran."));
             }
         }).start();
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (pendingFileCallback != null) {
+                Uri[] results = null;
+                if (resultCode == RESULT_OK && data != null) {
+                    if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        results = new Uri[count];
+                        for (int i = 0; i < count; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                        }
+                    } else if (data.getData() != null) {
+                        results = new Uri[]{data.getData()};
+                    }
+                }
+                pendingFileCallback.onReceiveValue(results);
+                pendingFileCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 }
