@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         TextView loading = new TextView(this);
         loading.setText("Starting...");
         setContentView(loading);
+        UpdateChecker.check(this);
         new Thread(() -> {
             try {
                 stageRepo();

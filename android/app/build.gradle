@@ -23,6 +23,19 @@ if (!buildPythonFile.isFile()) {
         'Point it at the python executable of a CPython 3.13 installation. See android/README.md.')
 }
 
+// Release signing is read from the environment so no key material ever enters the
+// repository. Without these values a release build is unsigned and cannot be
+// distributed; debug builds are unaffected. See android/README.md.
+def releaseKeystorePath = (System.getenv('TGMS_KEYSTORE_PATH') ?: '').trim()
+def releaseKeystorePassword = (System.getenv('TGMS_KEYSTORE_PASSWORD') ?: '').trim()
+def releaseKeyAlias = (System.getenv('TGMS_KEY_ALIAS') ?: 'tgm-stocks').trim()
+def releaseKeyPassword = (System.getenv('TGMS_KEY_PASSWORD') ?: releaseKeystorePassword).trim()
+def hasReleaseSigning = releaseKeystorePath && releaseKeystorePassword
+if (releaseKeystorePath && !file(releaseKeystorePath).isFile()) {
+    throw new GradleException(
+        "TGM Stocks: TGMS_KEYSTORE_PATH points at '${releaseKeystorePath}', which is not a file.")
+}
+
 android {
     namespace 'io.github.alwinsontgm.stocks'
     compileSdk 36
@@ -33,6 +46,23 @@ android {
         versionCode 1
         versionName '1.0.0'
         ndk { abiFilters 'arm64-v8a' }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
 }
 

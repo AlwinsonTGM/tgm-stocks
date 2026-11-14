@@ -200,3 +200,29 @@ the source artwork; do not edit the PNGs by hand.
 | `minSdk` | 24 |
 | `targetSdk` | 36 |
 | ABI | `arm64-v8a` only |
+
+## Release signing
+
+Release builds are signed from the environment; no key material is stored in the
+repository. Set all four variables before running `build-apk.ps1 -Variant release`:
+
+| Variable | Meaning |
+| --- | --- |
+| `TGMS_KEYSTORE_PATH` | Path to the release keystore (`.jks`) |
+| `TGMS_KEYSTORE_PASSWORD` | Keystore password |
+| `TGMS_KEY_ALIAS` | Key alias, default `tgm-stocks` |
+| `TGMS_KEY_PASSWORD` | Key password, default the keystore password |
+
+Without them the release build is unsigned and cannot be distributed.
+
+**Back up the keystore and its password offline.** Losing them means every
+existing install must be uninstalled before it can take an update, because
+Android refuses an update signed by a different key. The keystore must never be
+committed; `.gitignore` does not protect it if you place it inside the tree.
+
+## Version bump
+
+Update `versionCode` and `versionName` in `app/build.gradle`, and the same two
+values in `version.json`. The app reads `version.json` from the repository's main
+branch on launch and offers a link to the release page when the published
+`versionCode` is higher than the installed one.
