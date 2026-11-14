@@ -91,15 +91,15 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
         return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
-    def test_get_config_keeps_regular_sensitive_values_unmasked(self) -> None:
+    def test_get_config_masks_regular_sensitive_values(self) -> None:
         payload = self.service.get_config(include_schema=True)
         items = {item["key"]: item for item in payload["items"]}
 
         self.assertIn("openai", payload["llm_model_providers"])
         self.assertIn("xai", payload["llm_model_providers"])
         self.assertIn("GEMINI_API_KEY", items)
-        self.assertEqual(items["GEMINI_API_KEY"]["value"], "secret-key-value")
-        self.assertFalse(items["GEMINI_API_KEY"]["is_masked"])
+        self.assertEqual(items["GEMINI_API_KEY"]["value"], payload["mask_token"])
+        self.assertTrue(items["GEMINI_API_KEY"]["is_masked"])
         self.assertTrue(items["GEMINI_API_KEY"]["raw_value_exists"])
 
     def _assert_agent_backend_status_matches_runtime(
@@ -190,6 +190,9 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             "LLM_HERMES_API_KEY=sk-hermes-secret-value",
             "LLM_HERMES_API_KEYS=sk-old-secret-value",
             "LLM_HERMES_EXTRA_HEADERS={\"Authorization\":\"Bearer secret\"}",
+            "LLM_HERMES_PROTOCOL=openai",
+            "LLM_HERMES_BASE_URL=http://127.0.0.1:8642/v1",
+            "LLM_HERMES_MODELS=hermes-3",
         )
 
         payload = self.service.get_config(include_schema=True)
@@ -901,7 +904,8 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
             self.assertEqual(pre_save_items["OPENAI_BASE_URL"]["value"], "https://runtime-openai.v1")
             self.assertFalse(pre_save_items["OPENAI_BASE_URL"]["raw_value_exists"])
-            self.assertEqual(pre_save_items["OPENAI_API_KEY"]["value"], "runtime-openai-key")
+            self.assertEqual(pre_save_items["OPENAI_API_KEY"]["value"], pre_save["mask_token"])
+            self.assertTrue(pre_save_items["OPENAI_API_KEY"]["is_masked"])
             self.assertFalse(pre_save_items["OPENAI_API_KEY"]["raw_value_exists"])
             self.assertEqual(pre_save_items["LITELLM_MODEL"]["value"], "openai/gpt-4o-mini")
             self.assertTrue(pre_save_items["LITELLM_MODEL"]["raw_value_exists"])
@@ -3272,7 +3276,8 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         with patch.dict(os.environ, {"MODELFLARE_KEY": "sk-test"}, clear=True):
             config = self.service.get_config()
             items = {item["key"]: item for item in config["items"]}
-            self.assertEqual(items["MODELFLARE_KEY"]["value"], "sk-test")
+            self.assertEqual(items["MODELFLARE_KEY"]["value"], config["mask_token"])
+            self.assertTrue(items["MODELFLARE_KEY"]["is_masked"])
             self.assertFalse(items["MODELFLARE_KEY"]["raw_value_exists"])
             self.assertTrue(items["MODELFLARE_KEY"]["schema"]["is_sensitive"])
             self.assertTrue(self.service.preview_generation_backend_status(items=[])["primary"]["available"])

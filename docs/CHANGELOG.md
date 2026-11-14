@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] 配置 API 对注册表中所有敏感字段（LLM / 搜索 / 通知密钥、令牌、Webhook 等）统一返回掩码 `******` 并置 `is_masked`，不再把已保存的密钥明文回传给 Web UI；设置页以密码框展示，需用户主动点击眼睛图标才显示本次输入的内容，保存时提交掩码即保留原值（ADR-0004，`docs/security/android-threat-model.md`）。
+- [改进] TGM Stocks Android Manifest 关闭自动备份（`allowBackup=false`、`fullBackupContent=false`），并为 Android 12+ 新增 `dataExtractionRules`，在云备份与设备迁移中排除全部应用私有数据，API Key 与 Loopback token 不再可能随备份离开设备。
+- [修复] 搜索服务在 key 报错时不再把密钥前 8 位写入 WARNING 日志，只记录 key 序号，避免密钥片段进入 logcat。
+- [文档] 新增 `docs/security/android-threat-model.md`，说明沙箱、全盘加密、备份排除与 Loopback token 保护了什么，以及 root、恶意输入法、截图等不在保护范围内，并说明为何不采用 Keystore 存储。
+- [测试] 新增 `tests/test_secrets_hardening.py`：通过配置 API 写入已知密钥，验证落盘到应用私有 `.env`、重启后读取为掩码、重载后仍可用，且该值在任何日志级别下都不会出现在日志输出中。
 - [改进] 首次启动配置检查的「LLM 主渠道」新增「验证模型连通性」按钮：对已保存配置执行一次固定 prompt 的 smoke test，直接暴露 Key 被拒、Base URL 错误或模型不存在，避免配置状态显示「已配置」但首次真实调用即失败。
 - [改进] 首次启动配置检查新增「新闻搜索渠道」一项，并在「搜索服务」分类下同时展示该检查卡与「配置新闻搜索」入口；未配置搜索渠道时明确提示报告将不含新闻面证据，不阻断试跑。
 - [改进] 搜索服务字段的帮助文案补充 Tavily / Brave 的注册地址与取 Key 步骤、SearXNG 需开启 `format: json` 的前置条件，降低普通用户配置新闻搜索的门槛。

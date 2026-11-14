@@ -4,4 +4,4 @@ Keys entered in the web Settings page are written to `files/state/.env` inside a
 
 **Considered options**: `EncryptedSharedPreferences` with keys injected into the environment at startup (deferred: duplicates the config layer to defend against root, which already defeats it); encrypting `.env` itself (same reasoning).
 
-**Consequences**: the threat model must be written down, and release builds must never log key values.
+**Consequences**: the threat model must be written down, and release builds must never log key values. Both are in place: `docs/security/android-threat-model.md` states what is and is not protected, and `tests/test_secrets_hardening.py` proves a saved key never reaches log output.

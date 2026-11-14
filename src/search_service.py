@@ -359,7 +359,10 @@ class BaseSearchProvider(ABC):
         with self._state_lock:
             self._key_errors[key] = self._key_errors.get(key, 0) + 1
             error_count = self._key_errors[key]
-        logger.warning(f"[{self._name}] API Key {key[:8]}... 错误计数: {error_count}")
+        # Never log any part of a key: a prefix is still a secret fragment that
+        # ends up in logcat on Android. Identify it by position instead.
+        key_index = self._api_keys.index(key) if key in self._api_keys else -1
+        logger.warning(f"[{self._name}] API Key #{key_index + 1} 错误计数: {error_count}")
     
     @abstractmethod
     def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:

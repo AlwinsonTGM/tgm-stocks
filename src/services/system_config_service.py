@@ -207,12 +207,25 @@ class SystemConfigService:
             "skill": "specialist",
         }
     }
-    _SERVER_MASKED_CONFIG_KEYS: Set[str] = {
-        "LLM_HERMES_API_KEY",
-        "LLM_HERMES_API_KEYS",
-        "LLM_HERMES_EXTRA_HEADERS",
-        "LLM_USAGE_HMAC_SECRET",
-    }
+    # Every field the registry marks sensitive is masked here, so a key entered
+    # through the settings form never comes back from GET /config in plaintext.
+    # Revealing one is a client-side action: the Web UI's eye toggle shows the
+    # value while it is being typed, and the backend never echoes it back.
+    # ADR-0004 and docs/security/android-threat-model.md record the reasoning.
+    # Channel detail keys (LLM_<NAME>_API_KEY and friends) are not registry
+    # entries, so they are listed explicitly alongside the registry's fields.
+    _SERVER_MASKED_CONFIG_KEYS: Set[str] = frozenset(
+        {
+            "LLM_HERMES_API_KEY",
+            "LLM_HERMES_API_KEYS",
+            "LLM_HERMES_EXTRA_HEADERS",
+        }
+        | {
+            key.upper()
+            for key in get_registered_field_keys()
+            if get_field_definition(key).get("is_sensitive")
+        }
+    )
     _NOTIFICATION_TEST_CHANNELS: Tuple[str, ...] = (
         "wechat",
         "dingtalk",
