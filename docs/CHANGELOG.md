@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] 首次启动配置检查的「LLM 主渠道」新增「验证模型连通性」按钮：对已保存配置执行一次固定 prompt 的 smoke test，直接暴露 Key 被拒、Base URL 错误或模型不存在，避免配置状态显示「已配置」但首次真实调用即失败。
+- [改进] 首次启动配置检查新增「新闻搜索渠道」一项，并在「搜索服务」分类下同时展示该检查卡与「配置新闻搜索」入口；未配置搜索渠道时明确提示报告将不含新闻面证据，不阻断试跑。
+- [改进] 搜索服务字段的帮助文案补充 Tavily / Brave 的注册地址与取 Key 步骤、SearXNG 需开启 `format: json` 的前置条件，降低普通用户配置新闻搜索的门槛。
+- [修复] `SEARXNG_TIMEOUT_SECONDS` 从运维隐藏项改为「搜索服务」分类下的可编辑字段（默认 10，最小 1），使文档中「实例较慢可调大超时」的说明在 Web 设置页可操作。
 - [修复] Bark（`api.day.app`）自定义 Webhook 最终 payload 的 `body` 字段改为按 APNs 4096 字节 payload 上限截断（含全局模板渲染结果，按主机名识别 Bark），修复中文完整报告超限导致 Bark 返回 HTTP 500、手机收不到推送而测试消息正常的问题（#2503）。
 - [修复] 每日 Actions 未设置实时行情顺序时保留空值，使仅配置 TickPlus Key 的任务正确启用自动首选及批量实时预取；保留显式顺序和无 Key 免费源回退。
 

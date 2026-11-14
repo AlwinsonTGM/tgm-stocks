@@ -382,9 +382,9 @@ daily_stock_analysis/
 |--------|------|:----:|
 | `SERPAPI_API_KEYS` | SerpAPI 搜索引擎结果补强，适合实时金融新闻 | 推荐 |
 | `ANSPIRE_API_KEYS` | [Anspire](https://open.anspire.cn/dsa?share_code=QFBC0FYC) API Key（可选，模型与搜索共用；可用性以账号权限为准） | 可选 |
-| `TAVILY_API_KEYS` | Tavily 搜索 API Key | 可选 |
+| `TAVILY_API_KEYS` | Tavily 搜索 API Key（在 [app.tavily.com](https://app.tavily.com) 注册获取，最省事的起步选择） | 可选 |
 | `BOCHA_API_KEYS` | 博查搜索 API Key（中文优化） | 可选 |
-| `BRAVE_API_KEYS` | Brave Search API Key（美股优化） | 可选 |
+| `BRAVE_API_KEYS` | Brave Search API Key（美股优化，在 [api-dashboard.search.brave.com](https://api-dashboard.search.brave.com) 注册获取） | 可选 |
 | `MINIMAX_API_KEYS` | MiniMax Coding Plan Web Search（结构化搜索结果） | 可选 |
 | `SOCIAL_SENTIMENT_API_KEY` | Stock Sentiment API Key（Reddit / X / Polymarket，可选） | 可选 |
 | `SOCIAL_SENTIMENT_API_URL` | Stock Sentiment API 地址（默认 `https://api.adanos.org`） | 可选 |
