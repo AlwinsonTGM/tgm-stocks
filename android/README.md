@@ -226,3 +226,20 @@ Update `versionCode` and `versionName` in `app/build.gradle`, and the same two
 values in `version.json`. The app reads `version.json` from the repository's main
 branch on launch and offers a link to the release page when the published
 `versionCode` is higher than the installed one.
+
+## Releasing
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle`, and the same two values in `version.json`.
+2. Build the signed release APK (see Release signing above).
+3. Publish the release with notes that describe this app and state what changed:
+
+   ```bash
+   gh release create vX.Y.Z android/app/build/outputs/apk/release/app-release.apk \
+     --repo AlwinsonTGM/tgm-stocks \
+     --title "TGM Stocks X.Y.Z" \
+     --notes-file notes.md
+   ```
+
+4. The app's update check reads `version.json` from `main`, so commit the version bump before publishing.
+
+The upstream `create-release.yml` workflow was removed. It generated upstream's Chinese changelog and overwrote the release body on every tag, which described the original project rather than this app.

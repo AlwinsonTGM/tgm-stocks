@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android 7+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
-[![Latest release](https://img.shields.io/github/v/release/AlwinsonTGM/tgm-stocks)](https://github.com/AlwinsonTGM/tgm-stocks/releases/latest)
+[![Download APK](https://img.shields.io/badge/Download-APK-2ea44f?logo=android&logoColor=white)](https://github.com/AlwinsonTGM/tgm-stocks/releases/latest)
 
 [**Download the latest APK**](https://github.com/AlwinsonTGM/tgm-stocks/releases/latest) · [Report an issue](https://github.com/AlwinsonTGM/tgm-stocks/issues)
 
@@ -66,6 +66,15 @@ The script builds the web UI, stages the Python source, and assembles the APK. R
 | `src/`, `data_provider/`, `api/` | The analysis backend |
 | `docs/adr/` | Architecture decisions for this distribution |
 | `.scratch/tgm-stocks/` | The spec and the tickets that built it |
+
+## Contributing
+
+Contributions are welcome — this is an open-source project and it gets better with more eyes on it.
+
+- **Found a bug or have an idea?** Open an [issue](https://github.com/AlwinsonTGM/tgm-stocks/issues). Include the device model, Android version, and what you expected to happen.
+- **Want to improve the app, the build, or the docs?** Fork the repository, make your change, and open a pull request. Feel free to improve anything — the Android runtime, the release pipeline, the documentation, or the tests.
+- **Not Android-specific?** Improvements to the analysis engine, data providers, or web UI are best sent upstream to [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis), so every distribution benefits.
+- **Keep pull requests focused:** one change, a clear description, and the commands you ran to verify it. See [`android/README.md`](android/README.md) for the build and signing steps.
 
 ## Credits and license
 
