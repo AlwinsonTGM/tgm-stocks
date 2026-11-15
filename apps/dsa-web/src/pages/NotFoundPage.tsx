@@ -10,7 +10,7 @@ const NotFoundPage: React.FC = () => {
 
   // Set page title
   useEffect(() => {
-    document.title = L('页面未找到 - DSA', 'Page not found - DSA');
+    document.title = L('页面未找到 - TGM Stocks', 'Page not found - TGM Stocks');
   }, [language]);
 
   return (

@@ -112,7 +112,7 @@ const AlertsPage: React.FC = () => {
   const L = (zh: string, en: string) => (language === 'en' ? en : zh);
 
   useEffect(() => {
-    document.title = L('告警中心 - DSA', 'Alert Center - DSA');
+    document.title = L('告警中心 - TGM Stocks', 'Alert Center - TGM Stocks');
   }, [language]);
 
   const [rules, setRules] = useState<AlertRuleItem[]>([]);

@@ -29,6 +29,15 @@ See android/README.md.
 '@
 }
 
+# The web UI reports its version from DSA_WEB_VERSION. Pin it to the Android
+# version so the app shows TGM Stocks' version instead of the upstream tag.
+$appGradle = Join-Path $androidDir 'app\build.gradle'
+$versionMatch = Select-String -Path $appGradle -Pattern "versionName\s+'([^']+)'"
+if ($versionMatch) {
+    $env:DSA_WEB_VERSION = $versionMatch.Matches[0].Groups[1].Value
+    Write-Host "==> Web UI version: $env:DSA_WEB_VERSION" -ForegroundColor Cyan
+}
+
 Write-Host '==> Building the Web UI into static/' -ForegroundColor Cyan
 if (-not (Test-Path (Join-Path $webDir 'node_modules'))) {
     Push-Location $webDir
